@@ -1,4 +1,5 @@
 from datetime import datetime, timedelta
+from zoneinfo import ZoneInfo
 
 from sqlmodel import Session, select
 
@@ -16,6 +17,8 @@ def calculate_attendance_status(
     start_datetime = datetime.combine(
         class_session.class_date, class_session.start_time
     )
+    if current_time.tzinfo is not None:
+        current_time = current_time.astimezone(ZoneInfo("Asia/Ho_Chi_Minh")).replace(tzinfo=None)
     latest_on_time_datetime = start_datetime + timedelta(
         minutes=class_session.late_grace_minutes
     )
@@ -30,7 +33,7 @@ def mark_attendance_by_lora(
     session: Session,
     class_session_id: int,
     student_ids: list[int],
-    average_confidence: float = 0.8,
+    average_confidence: float | None = None,
 ) -> dict:
     """Xử lý điểm danh hàng loạt từ AI."""
     class_session = session.get(ClassSession, class_session_id)
@@ -43,7 +46,12 @@ def mark_attendance_by_lora(
             "message": "Buổi học không trong trạng thái ĐANG_DIEN_RA",
         }
 
-    current_time = datetime.now()
+    eligible_ids = set(session.exec(select(CourseRegistration.student_id).where(
+        CourseRegistration.class_section_id == class_session.class_section_id,
+        CourseRegistration.status.is_(True),
+    )).all())
+    student_ids = sorted(set(student_ids) & eligible_ids)
+    current_time = datetime.now(ZoneInfo("Asia/Ho_Chi_Minh"))
     current_status = calculate_attendance_status(class_session, current_time)
 
     # Lấy các record điểm danh đã có của các sinh viên này trong buổi học
@@ -126,7 +134,7 @@ def mark_attendance_manually(
         attendance.status = status
         attendance.edit_reason = note
         attendance.method = "THU_CONG"
-        attendance.attendance_time = datetime.now()
+        attendance.attendance_time = datetime.now(ZoneInfo("Asia/Ho_Chi_Minh"))
         session.add(attendance)
     else:
         attendance = Attendance(
@@ -134,7 +142,7 @@ def mark_attendance_manually(
             class_session_id=class_session_id,
             status=status,
             method="THU_CONG",
-            attendance_time=datetime.now(),
+            attendance_time=datetime.now(ZoneInfo("Asia/Ho_Chi_Minh")),
             edit_reason=note,
         )
         session.add(attendance)
@@ -171,7 +179,7 @@ def finalize_absent_attendance(*, session: Session, class_session: ClassSession)
             class_session_id=class_session.class_session_id,
             status="VANG",
             method="TU_DONG",
-            attendance_time=datetime.now(),
+            attendance_time=datetime.now(ZoneInfo("Asia/Ho_Chi_Minh")),
             edit_reason="Tự động đánh vắng khi chốt phiên",
         )
         absent_records.append(attendance)

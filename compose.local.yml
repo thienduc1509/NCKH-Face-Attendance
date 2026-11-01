@@ -1,0 +1,51 @@
+name: nckh-face-attendance
+services:
+  postgres:
+    image: pgvector/pgvector:pg15
+    environment:
+      POSTGRES_USER: root
+      POSTGRES_PASSWORD: local-demo-only
+      POSTGRES_DB: diemdanh
+    volumes:
+      - local_pg:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U root -d diemdanh"]
+      interval: 3s
+      retries: 20
+  redis:
+    image: redis:7-alpine
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile.local
+    environment:
+      DATABASE_URL: postgresql://root:local-demo-only@postgres:5432/diemdanh
+      REDIS_URL: redis://redis:6379/0
+      FIRST_SUPERUSER: admin@example.com
+      FIRST_SUPERUSER_PASSWORD: DemoLocal2026!
+      SECRET_KEY: attendance-local-demo-session-key-2026
+      FRONTEND_HOST: http://localhost:3000
+      IMAGE_STORAGE_PROVIDER: LOCAL
+    ports: ["127.0.0.1:8000:8000"]
+    volumes:
+      - local_models:/models
+      - local_uploads:/app/uploads
+      - local_dataset:/app/dataset
+      - local_vectors:/app/vector_db
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        NEXT_PUBLIC_API_URL: http://localhost:8000/api
+    ports: ["127.0.0.1:3000:3000"]
+volumes:
+  local_pg:
+  local_uploads:
+  local_dataset:
+  local_vectors:
+  local_models:

@@ -98,6 +98,22 @@ export default function StudentDashboard() {
     loadData()
   }, [])
 
+  useEffect(() => {
+    let disposed = false
+    const refreshSchedule = () => {
+      StudentService.getSchedule().then(items => {
+        if (!disposed) setSchedule(items)
+      }).catch(() => {})
+    }
+    const timer = setInterval(refreshSchedule, 5000)
+    window.addEventListener("focus", refreshSchedule)
+    return () => {
+      disposed = true
+      clearInterval(timer)
+      window.removeEventListener("focus", refreshSchedule)
+    }
+  }, [])
+
   if (loading) {
     return (
       <AppShell
@@ -153,7 +169,8 @@ export default function StudentDashboard() {
   // Map registered course classes and schedule items
   const upcomingClasses = (registeredCourses.length > 0
     ? registeredCourses.map(rc => {
-        const matchSched = schedule.find(s => s.class_section_id === rc.class_section_id || s.course_name === rc.course_name)
+        const matches = schedule.filter(s => s.class_section_id === rc.class_section_id)
+        const matchSched = matches.find(s => s.status === "DANG_DIEN_RA" || s.status === "ONGOING") || matches[0]
         return {
           id: matchSched?.class_session_id || rc.class_section_id,
           maBuoiHoc: matchSched?.class_session_id,

@@ -178,7 +178,7 @@ export default function AdminUserManagement() {
         fetchUsers()
       }
     } catch (err: any) {
-      alert(err.response?.data?.detail || "Lỗi khi tạo tài khoản người dùng.")
+      alert(err.message || "Lỗi khi tạo tài khoản người dùng.")
     } finally {
       setSubmitting(false)
     }

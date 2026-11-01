@@ -28,6 +28,7 @@ class StudentScheduleService:
         student_id: int,
         target_date: date,
         current_account: Account,
+        active_only: bool = False,
     ) -> TodaySchedulePublic:
         """Lay lich hoc trong ngay cua sinh vien."""
         student = get_student(session=self.session, student_id=student_id)
@@ -46,6 +47,7 @@ class StudentScheduleService:
             session=self.session,
             student_id=student_id,
             target_date=target_date,
+            active_only=active_only,
         )
         return TodaySchedulePublic(
             student_id=student_id,

@@ -76,3 +76,17 @@ nginx/ssl/
 
 # Ignore local test directory
 app/test/
+
+# Public release documentation
+!SOURCE_NOTES.md
+!docs/
+!docs/**
+!docs/**/*.md
+!requirements.txt
+!HUONG_DAN_CHAY_LOCAL.md
+# Private/local demo data
+/demo-lfw/
+*.pt
+*.pth
+*.onnx
+*.pkl

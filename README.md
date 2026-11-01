@@ -1,168 +1,69 @@
-# Hệ thống Điểm danh Sinh viên Tự động bằng Nhận diện Khuôn mặt
+# NCKH Face Attendance
 
-<a href="https://github.com/nghiemmmm/Online-Attendance-System/actions" target="_blank"><img src="https://github.com/nghiemmmm/Online-Attendance-System/actions/workflows/ci.yml/badge.svg" alt="CI - Run Tests"></a>
-<a href="https://github.com/nghiemmmm/Online-Attendance-System/actions" target="_blank"><img src="https://github.com/nghiemmmm/Online-Attendance-System/actions/workflows/deploy.yml/badge.svg" alt="Deploy to EC2"></a>
+Ứng dụng web hỗ trợ điểm danh sinh viên bằng nhận dạng khuôn mặt. Bản phát triển phục vụ nghiên cứu khoa học sinh viên; hiện vẫn đang thử nghiệm, chưa phải sản phẩm triển khai chính thức.
 
-**Hệ thống Điểm danh Sinh viên Tự động bằng Nhận diện Khuôn mặt (Online Attendance System with AI Face Recognition)** là một giải pháp chuyển đổi số toàn diện trong quản lý giáo dục. Hệ thống tự động hóa hoàn toàn quy trình điểm danh truyền thống bằng cách tích hợp camera thời gian thực qua WebRTC và đối soát danh tính siêu tốc qua mô hình học sâu (FaceNet, MTCNN) kết hợp cơ sở dữ liệu vector FAISS dưới 0.01 giây. Dự án hỗ trợ đắc lực cho Giảng viên trong việc kiểm soát chuyên cần lớp học, giúp Sinh viên tự thực hiện check-in nhanh chóng, minh bạch, đồng thời cung cấp cho Quản trị viên bức tranh thống kê toàn cảnh và nhật ký hoạt động bảo mật.
+## Nguồn mã và đóng góp
 
-## Công nghệ & Tính năng
+Kế thừa từ [nghiemmmm/Online-Attendance-System](https://github.com/nghiemmmm/Online-Attendance-System), commit nền `528fc2e`; giữ lịch sử tác giả gốc. Người công bố xác nhận đã được các bên có quyền đồng ý sử dụng, sửa đổi và công bố. Xem [SOURCE_NOTES.md](SOURCE_NOTES.md) và [README gốc](docs/README.upstream.md).
 
-### 🛠️ Công nghệ cốt lõi (Tech Stack)
-* **Backend:** [FastAPI](https://fastapi.tiangolo.com) (Python 3.11), [SQLModel](https://sqlmodel.tiangolo.com), [PostgreSQL](https://www.postgresql.org).
-* **AI & Thị giác máy tính:** [PyTorch](https://pytorch.org), **MTCNN** (phát hiện khuôn mặt), **FaceNet** (trích xuất vector 512 chiều), **FAISS** (tìm kiếm vector siêu tốc).
-* **Frontend:** [Next.js 16](https://nextjs.org) (React 19), [TypeScript](https://www.typescriptlang.org), [Tailwind CSS](https://tailwindcss.com), [shadcn/ui](https://ui.shadcn.com).
-* **Lưu trữ & Hệ thống:** [Cloudinary](https://cloudinary.com) (CDN lưu trữ ảnh), Redis Cache, Docker & Docker Compose.
-* **CI/CD & DevOps:** GitHub Actions (Automated Test, Build & Deploy EC2), Nginx Reverse Proxy.
+Những thay đổi local: sửa tạo tài khoản/hồ sơ, xử lý phiên đăng nhập hết hạn, bổ sung migrations, lọc đăng ký lớp khi điểm danh, sửa múi giờ, xác nhận ba lần nhận dạng liên tiếp ở nhánh WebRTC, sửa preview camera, cập nhật phiên đang mở cho sinh viên và bổ sung kiểm thử nghiệp vụ.
 
-### ✨ Tính năng nổi bật
-* 🎯 **Điểm danh AI thời gian thực:** Nhận diện khuôn mặt trực tiếp qua camera WebRTC với tốc độ tra cứu < 0.01s.
-* 🔐 **Bảo mật & Phân quyền:** Xác thực JWT (Access & Refresh Token), phân quyền chặt chẽ 3 vai trò (Admin, Giảng viên, Sinh viên).
-* 📝 **Quản lý & Khiếu nại chuyên cần:** Quản lý lớp học phần, lịch học, gửi và duyệt đơn khiếu nại kèm minh chứng ảnh.
-* 🧹 **Tự động hóa dọn dẹp:** Background worker tự động xóa ảnh điểm danh quá hạn sau 48 giờ để tối ưu lưu trữ.
-* 📊 **Báo cáo & Thống kê:** Xuất báo cáo chuyên cần lớp học và theo dõi nhật ký hoạt động hệ thống.
+MTCNN/FaceNet và FAISS là thành phần có sẵn; không tuyên bố mô hình do nhóm huấn luyện hoặc toàn bộ code do nhóm tự viết. Chưa áp giấy phép mới cho phần mã kế thừa.
 
-## Giao diện Dự án
+## Chạy trên máy bằng Docker Desktop
 
-### Trang Đăng nhập & Đăng ký
-| Đăng nhập | Đăng ký |
-| :---: | :---: |
-| ![Đăng nhập](img/login.jpg) | ![Đăng ký](img/register.jpg) |
+Cài Git và Docker Desktop, bật Linux containers. Sau đó mở PowerShell:
 
-### Dashboard theo Vai trò
-*   **Quản trị viên / Cán bộ (Admin/Staff):**
-    ![Dashboard Admin](img/dashboard-staff.jpg)
-*   **Giảng viên (Lecturer):**
-    ![Dashboard Giảng viên](img/dashboard-lecturer.jpg)
-*   **Sinh viên (Student):**
-    ![Dashboard Sinh viên](img/dashboard-student.jpg)
-
----
-
-## Kiến trúc Hệ thống & Quy trình CI/CD
-
-### Sơ đồ kiến trúc nhận diện khuôn mặt và WebRTC
-![Kiến trúc Hệ thống](img/system-architecture.png)
-
-### Sơ đồ quy trình CI/CD kiểm thử và deploy
-![Quy trình CI/CD](img/CICD%20(2).png)
-
----
-
-## API Overview
-
-Hệ thống cung cấp tập hợp các Restful API hỗ trợ đầy đủ luồng nghiệp vụ xác thực, điểm danh WebRTC AI, khiếu nại và báo cáo. Dưới đây là các nhóm API cốt lõi:
-
-### 1. Xác thực & Quản lý phiên (`/auth` & `/sessions`)
-*   `POST /auth/tokens`: Đăng nhập chuẩn JSON (hỗ trợ Remember Me cấp Refresh Token).
-*   `POST /auth/access-tokens`: Đăng nhập tương thích OAuth2 Password Flow.
-*   `POST /auth/token-refreshes`: Cấp mới Access Token từ Refresh Token hợp lệ.
-*   `DELETE /sessions/current`: Đăng xuất phiên hiện tại (thu hồi Refresh Token hiện tại).
-*   `DELETE /sessions`: Đăng xuất tất cả các thiết bị.
-
-### 2. Đăng ký & Tài khoản (`/users`)
-*   `POST /users/send-otp`: Yêu cầu gửi mã OTP xác thực về email sinh viên.
-*   `POST /users/registrations`: Đăng ký tài khoản sinh viên sau khi xác thực mã OTP thành công.
-*   `POST /users/signup`: Đăng ký tài khoản và tự động tạo hồ sơ sinh viên đi kèm.
-*   `GET /users/me/profile`: Đọc hồ sơ cá nhân và trạng thái dữ liệu khuôn mặt.
-
-### 3. Điểm danh AI & Camera Live (`/webrtc` & `/attendance`)
-*   `POST /webrtc/offers`: Thiết lập kết nối WebRTC truyền luồng video từ camera lên server AI.
-*   `GET /class-sections/my-sections`: Lấy danh sách lớp học phần đã đăng ký (sinh viên) hoặc giảng dạy (giảng viên).
-*   `POST /class-sessions/{id}/attendance`: Điểm danh thủ công hoặc ghi nhận điểm danh tự động.
-
-### 4. Khiếu nại Chuyên cần (`/appeals`)
-*   `POST /appeals`: Sinh viên tạo đơn khiếu nại (kèm lý do và minh chứng ảnh).
-*   `PATCH /appeals/{id}`: Giảng viên duyệt đơn khiếu nại (chấp nhận/từ chối).
-
----
-
-## Cấu hình dự án
-
-### ⚙️ Cấu hình Biến Môi trường (.env)
-Trước khi khởi chạy hệ thống, hãy tạo file `.env` từ file mẫu [`.env.example`](./.env.example):
-```bash
-cp .env.example .env
+```powershell
+git clone https://github.com/freekunai01-ops/NCKH-Face-Attendance.git
+cd NCKH-Face-Attendance
+.\Start-Local.ps1 -Build
 ```
 
-Các biến môi trường cốt lõi cần lưu ý:
-- `SECRET_KEY`: Chuỗi khóa bí mật dùng để mã hóa mã thông báo JWT.
-- `FIRST_SUPERUSER` & `FIRST_SUPERUSER_PASSWORD`: Email và mật khẩu tài khoản Admin khởi tạo ban đầu.
-- `DATABASE_URL`: Chuỗi kết nối PostgreSQL (Mặc định: `postgresql://postgres:postgres@localhost:5432/attendance_db`).
-- `CLOUDINARY_CLOUD_NAME`, `CLOUDINARY_API_KEY`, `CLOUDINARY_API_SECRET`: Thông tin cấu hình lưu trữ ảnh Cloudinary.
+Lần build đầu cần Internet để tải thư viện; mô hình nhận diện được tải khi sử dụng lần đầu và lưu trong Docker volume. Dockerfile.local trong bản public tự build từ Python, không cần image benchmark trên máy tác giả. Không cần tạo .env để chạy cấu hình local này.
 
----
+Web: http://localhost:3000
+API: http://localhost:8000/api/docs
 
-## Hướng dẫn Khởi chạy Dự án
+Admin local: `admin@example.com` / `DemoLocal2026!`. Đây là tài khoản mẫu công khai, chỉ dùng trên localhost. Không dùng cấu hình demo để mở dịch vụ Internet.
 
-### 🚀 Cách 1: Khởi chạy Nhanh với Docker Compose (Khuyên dùng)
-Chạy toàn bộ dịch vụ (FastAPI Backend, Next.js Frontend, PostgreSQL, Redis, Nginx) chỉ với 1 câu lệnh:
-```bash
-docker compose up -d --build
-```
-- **Frontend Web App:** [http://localhost:3000](http://localhost:3000)
-- **Backend API & Swagger UI:** [http://localhost:8000/docs](http://localhost:8000/docs)
+Nếu PowerShell chặn script, chạy các lệnh tương đương:
 
----
-
-### 💻 Cách 2: Khởi chạy Thủ công (Local Development)
-
-#### 1. Khởi chạy Backend (FastAPI)
-```bash
-# Tạo và kích hoạt môi trường ảo Python
-python -m venv venv
-venv\Scripts\activate  # Trên Windows (hoặc: source venv/bin/activate trên Linux/macOS)
-
-# Cài đặt các thư viện phụ thuộc
-pip install -r requirements.txt
-
-# Thực thi Migration cấu trúc CSDL
-alembic upgrade head
-
-# Khởi chạy máy chủ API
-uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+```powershell
+docker compose -f compose.local.yml build
+docker compose -f compose.local.yml up -d postgres redis
+docker compose -f compose.local.yml run --rm backend alembic upgrade head
+docker compose -f compose.local.yml run --rm backend python -m app.initial_data
+docker compose -f compose.local.yml up -d
 ```
 
-#### 2. Khởi chạy Frontend (Next.js)
-```bash
-cd frontend
+Những lần sau: `.\Start-Local.ps1`. Dừng: `docker compose -f compose.local.yml stop`. Xem lỗi: `docker compose -f compose.local.yml logs --tail 100 backend frontend`. Các volume giữ database, ảnh và model qua lần khởi động. Không dùng `down -v` nếu muốn giữ dữ liệu.
 
-# Cài đặt các gói dependencies
-npm install
+## Tạo dữ liệu demo tùy chọn
 
-# Khởi chạy giao diện chế độ Development
-npm run dev
+Sau khi ứng dụng chạy:
+
+```powershell
+Get-Content seed_local_demo.py -Raw | docker compose -f compose.local.yml exec -T backend python -
 ```
 
----
+Tạo 1 giảng viên (`gv.demo@example.com`), 5 sinh viên (`sv.demo01@example.com` đến `sv.demo05@example.com`), 2 lớp và bản ghi chuyên cần giả lập. Mật khẩu chung `DemoLocal2026!`. Không có ảnh khuôn mặt thật trong repository; tự đăng ký ảnh người đồng ý tham gia thử nghiệm.
 
-## 📖 Tài liệu API & Kiểm thử (API Docs & Testing)
+## Quy trình thử
 
-### 1. Tài liệu API Tương tác (Interactive Docs)
-Sau khi khởi chạy Backend, bạn có thể kiểm thử trực tiếp các API tại:
-- **Swagger UI:** [http://localhost:8000/docs](http://localhost:8000/docs)
-- **ReDoc:** [http://localhost:8000/redoc](http://localhost:8000/redoc)
+Admin tạo sinh viên, đăng ký ảnh và thêm vào lớp. Giảng viên mở đúng buổi học và bật camera lớp. Hoặc sinh viên đăng nhập riêng để tự xác minh trong cùng ID buổi học. Xem trạng thái cập nhật và xuất CSV/Excel. Camera lớp và camera sinh viên là hai cách nhập liệu, không phải hệ thống họp video giữa các tài khoản.
 
-### 2. Chạy Kiểm thử Tự động (Automated Tests)
-- **Kiểm thử Backend (Pytest & Coverage):**
-  ```bash
-  pytest --cov=app --cov-report=term-missing tests/
-  ```
-- **Kiểm thử Frontend (Jest):**
-  ```bash
-  cd frontend
-  npm test
-  ```
+Luồng WebRTC xác nhận cùng danh tính ở ba lần xử lý liên tiếp; nhánh xác minh ảnh đơn có hành vi riêng. Chưa có chống giả mạo bằng ảnh/video; chưa đánh giá lớp học thật hoặc nhiều camera đồng thời. Dữ liệu demo không phải kết quả nhận diện thực tế.
 
----
+## Kiểm thử
 
-## Hạn chế Hiện tại
+`check_application_flows.py` và `check_active_sessions.py` cần dữ liệu demo trên PostgreSQL; chúng kiểm tra trong giao dịch rollback:
 
-1.  **Hiệu năng đồng thời ⭐⭐⭐⭐⭐**: Gặp độ trễ xử lý khi nhiều sinh viên thực hiện nhận diện khuôn mặt cùng lúc.
-2.  **Độ chính xác phụ thuộc môi trường ⭐⭐⭐⭐⭐**: Ảnh hưởng bởi ánh sáng yếu, góc nghiêng lớn, chất lượng camera hoặc khi sinh viên đeo khẩu trang, kính.
-3.  **Chưa hỗ trợ Liveness Detection ⭐⭐⭐⭐⭐**: Chưa tích hợp kiểm tra thực thể sống nên có nguy cơ bị gian lận bằng hình ảnh hoặc video.
+```powershell
+Get-Content check_application_flows.py -Raw | docker compose -f compose.local.yml exec -T backend python -
+Get-Content check_active_sessions.py -Raw | docker compose -f compose.local.yml exec -T backend python -
+```
 
----
+Một số kiểm tra trong script active sessions gắn với dữ liệu demo cụ thể; điều chỉnh ID/ngày nếu dataset khác. Kiểm thử API dùng dependency override, không thay cho kiểm thử đăng nhập hay camera đầu cuối.
 
-## Thông tin Đồ án & Bản quyền
-
-Dự án này là sản phẩm **Đồ án môn học Thực tập cơ sở (TTCS)**, được xây dựng và phát triển phục vụ mục đích học tập, nghiên cứu và trình diễn giải pháp công nghệ điểm danh tự động ứng dụng Trí tuệ nhân tạo (AI).
+Workflow CI/deploy gốc được lưu tại `docs/upstream-workflows` để tham khảo; bản public không tự deploy lên hạ tầng tác giả gốc. Tài liệu và báo cáo riêng, dữ liệu LFW, ảnh sinh viên, vector, .env, cache và thư viện cài sẵn không được đưa vào bản công bố.

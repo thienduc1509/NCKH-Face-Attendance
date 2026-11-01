@@ -399,6 +399,15 @@ export function WebRTCStream({ maBuoiHoc, onConnectionStateChange }: WebRTCStrea
     }
   }
 
+  // Attach the stream after React mounts the video element.
+  useEffect(() => {
+    const video = localVideoRef.current
+    if (streamActive && video && localStreamRef.current) {
+      video.srcObject = localStreamRef.current
+      video.play().catch(() => setErrorMsg("Không thể phát camera. Vui lòng bật lại camera."))
+    }
+  }, [streamActive])
+
   // Cleanup on unmount
   useEffect(() => {
     return () => {

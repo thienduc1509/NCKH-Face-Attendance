@@ -353,17 +353,18 @@ def delete_account(
     return Message(message="Account deleted successfully")
 
 
-from pydantic import Field, field_validator
+from pydantic import AliasChoices, EmailStr, Field, field_validator
 
 
 class UserWithProfileCreate(AppBaseModel):
-    ten_dang_nhap: str = Field(min_length=1, max_length=50)
+    ten_dang_nhap: str = Field(min_length=1, max_length=50, validation_alias=AliasChoices("username", "ten_dang_nhap"))
     password: str = Field(min_length=5, max_length=128)
-    vai_tro: str = Field(min_length=1, max_length=20)  # student, lecturer, admin
-    ho: str = Field(min_length=1, max_length=50)
-    ten: str = Field(min_length=1, max_length=50)
-    dien_thoai: str | None = Field(default=None, max_length=15)
-    gioi_tinh: str | None = Field(default=None, max_length=10)
+    vai_tro: str = Field(min_length=1, max_length=20, validation_alias=AliasChoices("role", "vai_tro"))  # student, lecturer, admin
+    ho: str = Field(default="", max_length=50, validation_alias=AliasChoices("last_name", "ho"))
+    ten: str = Field(min_length=1, max_length=50, validation_alias=AliasChoices("first_name", "ten"))
+    dien_thoai: str | None = Field(default=None, max_length=15, validation_alias=AliasChoices("phone", "dien_thoai"))
+    gioi_tinh: str | None = Field(default=None, max_length=10, validation_alias=AliasChoices("gender", "gioi_tinh"))
+    email: EmailStr | None = None
 
     @field_validator("vai_tro")
     @classmethod
@@ -400,68 +401,44 @@ def create_account_with_profile(
     payload: UserWithProfileCreate,
 ) -> Any:
     """Tạo đồng thời cả tài khoản đăng nhập lẫn hồ sơ sinh viên/giảng viên."""
-    # Kiểm tra trùng tên đăng nhập
-    account = crud.get_account_by_username(
-        session=session, ten_dang_nhap=payload.ten_dang_nhap
-    )
-    if account:
-        raise HTTPException(
-            status_code=400,
-            detail="The account with this username already exists",
-        )
-
-    # Map role
-    db_role = "SINH_VIEN"
-    if payload.vai_tro == "lecturer":
-        db_role = "GIANG_VIEN"
-    elif payload.vai_tro == "admin":
-        db_role = "ADMIN"
-
-    # Tạo tài khoản
-    db_account = Account(
-        username=payload.ten_dang_nhap,
-        password_hash=get_password_hash(payload.password),
-        role=db_role,
-        status=True,
-    )
-    session.add(db_account)
-    session.commit()
-    session.refresh(db_account)
-
-    # Tạo hồ sơ đi kèm
-    if db_role == "SINH_VIEN":
-        nganh = session.exec(select(Major)).first()
-        if not nganh:
-            nganh = Major(major_name="Công nghệ thông tin", description="Default")
-            session.add(nganh)
-            session.commit()
-            session.refresh(nganh)
-
-        db_sinhvien = Student(
-            last_name=payload.ho,
-            first_name=payload.ten,
-            google_email=payload.ten_dang_nhap,
-            phone=payload.dien_thoai,
-            gender=payload.gioi_tinh,
-            major_id=nganh.major_id,
-            account_id=db_account.account_id,
-        )
-        session.add(db_sinhvien)
+    username = payload.ten_dang_nhap.strip()
+    if not username:
+        raise HTTPException(status_code=422, detail="Tên đăng nhập không được để trống")
+    if crud.get_account_by_username(session=session, username=username):
+        raise HTTPException(status_code=409, detail="Tên đăng nhập đã tồn tại")
+    email = str(payload.email).lower() if payload.email else None
+    role = {"student": "SINH_VIEN", "lecturer": "GIANG_VIEN", "admin": "ADMIN"}[payload.vai_tro]
+    profile_model = Student if role == "SINH_VIEN" else Staff
+    if email and role != "ADMIN" and session.exec(select(profile_model).where(profile_model.google_email == email)).first():
+        raise HTTPException(status_code=409, detail="Email đã được sử dụng cho hồ sơ khác")
+    from sqlalchemy.exc import IntegrityError
+    try:
+        account = Account(username=username, password_hash=get_password_hash(payload.password), role=role)
+        session.add(account)
+        session.flush()
+        profile = dict(last_name=payload.ho, first_name=payload.ten, google_email=email,
+                       phone=payload.dien_thoai, gender=payload.gioi_tinh, account_id=account.account_id)
+        if role == "SINH_VIEN":
+            major = session.exec(select(Major)).first()
+            if major is None:
+                major = Major(major_name="Công nghệ thông tin", description="Mặc định")
+                session.add(major)
+                session.flush()
+            session.add(Student(**profile, major_id=major.major_id))
+        elif role == "GIANG_VIEN":
+            session.add(Staff(**profile, position="Giảng viên"))
         session.commit()
-    elif db_role == "GIANG_VIEN":
-        db_canbo = Staff(
-            last_name=payload.ho,
-            first_name=payload.ten,
-            google_email=payload.ten_dang_nhap,
-            phone=payload.dien_thoai,
-            gender=payload.gioi_tinh,
-            account_id=db_account.account_id,
-            position="Giảng viên",
-        )
-        session.add(db_canbo)
-        session.commit()
+        session.refresh(account)
+        return account
+    except IntegrityError as exc:
+        session.rollback()
+        raise HTTPException(status_code=409, detail="Tên đăng nhập hoặc email đã tồn tại") from exc
 
-    return db_account
+
+# The web UI uses /profiles; retain /with-profile for existing clients.
+router.add_api_route("/profiles", create_account_with_profile, methods=["POST"],
+                     response_model=AccountPublic, status_code=201,
+                     dependencies=[Depends(get_current_active_superuser)])
 
 
 @router.patch(
@@ -483,3 +460,8 @@ def toggle_account_status(
     session.commit()
     session.refresh(db_account)
     return db_account
+
+
+router.add_api_route("/{account_id}/status", toggle_account_status, methods=["PATCH"],
+                     response_model=AccountPublic,
+                     dependencies=[Depends(get_current_active_superuser)])

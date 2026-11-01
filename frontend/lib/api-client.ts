@@ -56,8 +56,12 @@ export const apiClient = {
     }
 
     if (!response.ok) {
-      // Handle unauthorized (e.g., token expired)
-      if (response.status === 401) {
+      const errorData = await response.json().catch(() => ({}));
+      // Older backends return 403 for invalid JWTs; role-denial 403s must stay on the page.
+      const invalidSession = response.status === 401 || (
+        response.status === 403 && errorData.detail === "Could not validate credentials"
+      );
+      if (requiresAuth && invalidSession) {
         if (typeof window !== "undefined") {
           localStorage.removeItem("access_token");
           localStorage.removeItem("refresh_token");
@@ -67,9 +71,8 @@ export const apiClient = {
         }
       }
 
-      const errorData = await response.json().catch(() => ({}));
-      let message = "";
-      if (typeof errorData.detail === "string") {
+      let message = invalidSession ? "Phiên đăng nhập đã hết hạn hoặc không hợp lệ. Vui lòng đăng nhập lại." : "";
+      if (!invalidSession && typeof errorData.detail === "string") {
         message = errorData.detail;
       } else if (Array.isArray(errorData.detail)) {
         message = errorData.detail.map((err: any) => err.msg || JSON.stringify(err)).join("; ");

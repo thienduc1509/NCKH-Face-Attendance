@@ -130,8 +130,12 @@ export const StudentService = {
 
   getSchedule: async (): Promise<any[]> => {
     try {
-      const response = await apiClient.get<any>("/schedules/me/today");
-      return response.data || [];
+      const [today, active] = await Promise.all([
+        apiClient.get<any>("/schedules/me/today"),
+        apiClient.get<any>("/schedules/me/active"),
+      ]);
+      const sessions = [...(active.data || []), ...(today.data || [])];
+      return sessions.filter((item, index) => sessions.findIndex(other => other.class_session_id === item.class_session_id) === index);
     } catch (error) {
       console.error("Error fetching schedule:", error);
       return [];

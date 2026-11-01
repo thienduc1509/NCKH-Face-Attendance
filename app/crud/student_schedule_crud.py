@@ -22,6 +22,7 @@ def get_today_schedule_by_student(
     session: Session,
     student_id: int,
     target_date: date,
+    active_only: bool = False,
 ) -> tuple[list[TodayScheduleItem], int]:
     """Lay danh sach buoi hoc trong ngay cua sinh vien."""
     statement = (
@@ -38,7 +39,7 @@ def get_today_schedule_by_student(
             CourseRegistration.student_id == student_id,
             CourseRegistration.status.is_(True),
             ClassSection.status.is_(True),
-            ClassSession.class_date == target_date,
+            (ClassSession.status == "DANG_DIEN_RA") if active_only else (ClassSession.class_date == target_date),
         )
         .order_by(ClassSession.start_time, ClassSection.class_section_id)
     )

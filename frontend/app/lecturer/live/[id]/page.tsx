@@ -314,12 +314,12 @@ export default function LecturerLiveClassroom() {
       </div>
 
       {/* Right Sidebar - Command Center */}
-      <div className="w-[32%] bg-[#161B22] border-l border-[#2D3748] flex flex-col overflow-hidden">
+      <div className="w-[32%] bg-[#161B22] border-l border-[#2D3748] flex flex-col overflow-y-auto">
         {/* Camera Nhận Diện Lớp Học WebRTC */}
         {sessionActive && (
           <div className="p-4 border-b border-[#2D3748] shrink-0">
             <h3 className="text-sm font-medium text-[#94A3B8] mb-3">Camera nhận diện lớp học (AI)</h3>
-            <div className="h-[200px]">
+            <div className="min-h-[360px]">
               <WebRTCStream maBuoiHoc={maBuoiHoc} />
             </div>
           </div>
