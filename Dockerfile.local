@@ -1,10 +1,12 @@
 FROM python:3.11-slim-bookworm
-ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 TORCH_HOME=/models OMP_NUM_THREADS=4
+ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 TORCH_HOME=/models MODEL_WEIGHTS_DIR=/models OMP_NUM_THREADS=4
 RUN apt-get update && apt-get install -y --no-install-recommends libgomp1 libglib2.0-0 libgl1 libpq5 ffmpeg curl && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
 RUN pip install --no-cache-dir numpy==1.26.4 torch==2.1.1+cpu torchvision==0.16.1+cpu --extra-index-url https://download.pytorch.org/whl/cpu
 COPY requirements.txt /tmp/requirements.txt
 RUN printf 'numpy==1.26.4\nfacenet-pytorch==2.5.3\n' > /tmp/constraints.txt && pip install --no-cache-dir -r /tmp/requirements.txt -c /tmp/constraints.txt redis greenlet openpyxl
 COPY app /app/app
+COPY scripts /app/scripts
+COPY seed_local_demo.py /app/seed_local_demo.py
 COPY alembic.ini /app/alembic.ini
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]

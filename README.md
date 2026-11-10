@@ -15,7 +15,7 @@ MTCNN/FaceNet và FAISS là thành phần có sẵn; không tuyên bố mô hìn
 Cài Git và Docker Desktop, bật Linux containers. Sau đó mở PowerShell:
 
 ```powershell
-git clone https://github.com/freekunai01-ops/NCKH-Face-Attendance.git
+git clone https://github.com/thienduc1509/NCKH-Face-Attendance.git
 cd NCKH-Face-Attendance
 .\Start-Local.ps1 -Build
 ```
@@ -44,7 +44,7 @@ Những lần sau: `.\Start-Local.ps1`. Dừng: `docker compose -f compose.local
 Sau khi ứng dụng chạy:
 
 ```powershell
-Get-Content seed_local_demo.py -Raw | docker compose -f compose.local.yml exec -T backend python -
+docker compose -f compose.local.yml exec -T backend python seed_local_demo.py
 ```
 
 Tạo 1 giảng viên (`gv.demo@example.com`), 5 sinh viên (`sv.demo01@example.com` đến `sv.demo05@example.com`), 2 lớp và bản ghi chuyên cần giả lập. Mật khẩu chung `DemoLocal2026!`. Không có ảnh khuôn mặt thật trong repository; tự đăng ký ảnh người đồng ý tham gia thử nghiệm.
