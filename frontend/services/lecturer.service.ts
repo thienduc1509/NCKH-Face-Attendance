@@ -271,7 +271,8 @@ export const LecturerService = {
       ? `/reports/class-sections/${maLopHocPhan}/attendance?format=csv`
       : `/reports/class-sections/${maLopHocPhan}/attendance?format=xlsx`;
     const token = typeof window !== "undefined" ? localStorage.getItem("access_token") : null;
-    const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:5050/api"}${endpoint}`, {
+    const baseUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api";
+    const response = await fetch(`${baseUrl}${endpoint}`, {
       headers: token ? { Authorization: `Bearer ${token}` } : {},
     });
     if (!response.ok) {

@@ -73,7 +73,7 @@ class FaceImage(FaceImageBase, table=True):
     )
     embedding_vector: list[float] | None = Field(
         default=None,
-        sa_column=Column(Vector(512), nullable=True),
+        sa_column=Column(Vector(128), nullable=True),
     )
 
 

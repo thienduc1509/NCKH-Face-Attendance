@@ -52,9 +52,31 @@ async def offer(
         # Media recorder
         recorder = MediaBlackhole()
 
+        # Track reference holders for bi-directional binding
+        vt_holder: list[VideoTransformTrack] = []
+        dc_holder: list[any] = []
+
         @pc.on("datachannel")
         def on_datachannel(channel):
             manager.add_data_channel(channel)
+            dc_holder.append(channel)
+            log_info("DataChannel %s received, state: %s", getattr(channel, "label", "unknown"), getattr(channel, "readyState", "unknown"))
+
+            if vt_holder:
+                vt_holder[0].set_data_channel(channel)
+
+            @channel.on("open")
+            def on_open():
+                log_info("DataChannel %s opened", getattr(channel, "label", "unknown"))
+                if vt_holder:
+                    vt_holder[0].set_data_channel(channel)
+
+            @channel.on("close")
+            def on_close():
+                log_info("DataChannel %s closed", getattr(channel, "label", "unknown"))
+                manager.discard_data_channel(channel)
+                if vt_holder:
+                    vt_holder[0].set_data_channel(None)
 
             @channel.on("message")
             def on_message(message):
@@ -73,9 +95,13 @@ async def offer(
             log_info("Track %s received", track.kind)
 
             if track.kind == "video":
+                active_dc = dc_holder[0] if dc_holder else None
                 vt = VideoTransformTrack(
-                    manager.relay.subscribe(track), class_session_id=class_session_id
+                    manager.relay.subscribe(track),
+                    class_session_id=class_session_id,
+                    data_channel=active_dc,
                 )
+                vt_holder.append(vt)
                 pc.addTrack(vt)
 
             @track.on("ended")

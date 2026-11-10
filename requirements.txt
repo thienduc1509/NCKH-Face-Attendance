@@ -1,9 +1,9 @@
 fastapi==0.104.1
 uvicorn==0.24.0
 pillow==10.1.0
-torch==2.1.1
-torchvision==0.16.1
 pandas==2.1.4
+openpyxl>=3.1.2
+opencv-python-headless>=4.8.0
 python-multipart>=0.0.9
 pydantic==2.11.7
 python-dotenv==1.0.0
@@ -29,5 +29,4 @@ cloudinary==1.40.0
 faiss-cpu==1.11.0
 aiortc
 Jinja2
-facenet-pytorch
 ruff==0.6.9

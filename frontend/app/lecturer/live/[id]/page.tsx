@@ -14,6 +14,14 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
+import { Toaster } from "@/components/ui/sonner"
+import { toast } from "sonner"
+import {
   Play,
   Square,
   Settings,
@@ -26,7 +34,11 @@ import {
   VideoOff,
   Loader2,
   AlertCircle,
-  ArrowLeft
+  ArrowLeft,
+  Download,
+  FileSpreadsheet,
+  FileText,
+  ChevronDown
 } from "lucide-react"
 import { useParams, useRouter } from "next/navigation"
 import { apiClient } from "@/lib/api-client"
@@ -60,6 +72,8 @@ export default function LecturerLiveClassroom() {
   const [error, setError] = useState<string | null>(null)
   const [className, setClassName] = useState("Lớp học phần")
   const [sessionNum, setSessionNum] = useState(1)
+  const [classSectionId, setClassSectionId] = useState<number | null>(null)
+  const [isExporting, setIsExporting] = useState(false)
 
   const loadSessionData = async () => {
     if (!maBuoiHoc) return
@@ -71,6 +85,9 @@ export default function LecturerLiveClassroom() {
       setSessionNum(buoiHoc.session_number || 1)
       setSessionActive(buoiHoc.status === "DANG_DIEN_RA")
       setClassName(buoiHoc.course_name || `Lớp học phần ${buoiHoc.class_section_id}`)
+      if (buoiHoc.class_section_id) {
+        setClassSectionId(buoiHoc.class_section_id)
+      }
 
       const attList = await LecturerService.getLiveAttendance(maBuoiHoc)
       setStudents(attList)
@@ -179,6 +196,26 @@ export default function LecturerLiveClassroom() {
     }
   }
 
+  const handleExportAttendance = async (format: "excel" | "csv") => {
+    if (!classSectionId) {
+      toast.error("Không tìm thấy thông tin lớp học phần để xuất báo cáo.")
+      return
+    }
+    setIsExporting(true)
+    const formatLabel = format === "excel" ? "Excel (.xlsx)" : "CSV (.csv)"
+    const toastId = toast.loading(`Đang khởi tạo và tải báo cáo điểm danh ${formatLabel}...`)
+    try {
+      await LecturerService.downloadAttendanceReport(classSectionId, format)
+      toast.success(`Đã xuất báo cáo điểm danh ${formatLabel} thành công!`, { id: toastId })
+    } catch (err: any) {
+      console.error("Lỗi xuất báo cáo điểm danh:", err)
+      const msg = err?.message || "Không thể tải file báo cáo điểm danh."
+      toast.error(`Xuất báo cáo thất bại: ${msg}`, { id: toastId })
+    } finally {
+      setIsExporting(false)
+    }
+  }
+
   if (loading) {
     return (
       <div className="min-h-screen bg-[#0D1117] text-white flex items-center justify-center flex-col">
@@ -203,6 +240,7 @@ export default function LecturerLiveClassroom() {
 
   return (
     <div className="min-h-screen bg-[#0D1117] text-white flex">
+      <Toaster richColors position="top-right" />
       {/* Main Grid Area */}
       <div className="flex-1 flex flex-col p-4">
         {/* Header */}
@@ -221,6 +259,45 @@ export default function LecturerLiveClassroom() {
                 <span className="font-mono">{formatTime(sessionTime)}</span>
               </div>
             )}
+
+            {/* Nút Xuất Excel / CSV */}
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={!classSectionId || isExporting}
+                  className="border-[#22C55E]/40 bg-[#22C55E]/10 text-[#22C55E] hover:bg-[#22C55E]/20 hover:text-[#22C55E] text-xs font-semibold h-9 px-3 gap-1.5 transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {isExporting ? (
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  ) : (
+                    <Download className="w-3.5 h-3.5" />
+                  )}
+                  <span>{isExporting ? "Đang xuất..." : "Xuất Excel / CSV"}</span>
+                  <ChevronDown className="w-3.5 h-3.5 ml-0.5 opacity-70" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="bg-[#161B22] border-[#30363D] text-[#C9D1D9] min-w-[180px] shadow-xl">
+                <DropdownMenuItem
+                  onClick={() => handleExportAttendance("excel")}
+                  disabled={isExporting}
+                  className="hover:bg-[#21262D] hover:text-[#22C55E] focus:bg-[#21262D] focus:text-[#22C55E] cursor-pointer flex items-center gap-2.5 py-2.5 px-3 text-xs"
+                >
+                  <FileSpreadsheet className="w-4 h-4 text-[#22C55E]" />
+                  <span>Xuất Excel (.xlsx)</span>
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onClick={() => handleExportAttendance("csv")}
+                  disabled={isExporting}
+                  className="hover:bg-[#21262D] hover:text-[#0EA5E9] focus:bg-[#21262D] focus:text-[#0EA5E9] cursor-pointer flex items-center gap-2.5 py-2.5 px-3 text-xs"
+                >
+                  <FileText className="w-4 h-4 text-[#0EA5E9]" />
+                  <span>Xuất CSV (.csv)</span>
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+
             <Button
               variant="outline"
               onClick={() => router.push("/lecturer/live")}
@@ -320,7 +397,18 @@ export default function LecturerLiveClassroom() {
           <div className="p-4 border-b border-[#2D3748] shrink-0">
             <h3 className="text-sm font-medium text-[#94A3B8] mb-3">Camera nhận diện lớp học (AI)</h3>
             <div className="min-h-[360px]">
-              <WebRTCStream maBuoiHoc={maBuoiHoc} />
+              <WebRTCStream
+                maBuoiHoc={maBuoiHoc}
+                onAttendanceMarked={(student) => {
+                  toast.success(`Đã điểm danh: ${student.student_name} (${student.student_id})`, {
+                    icon: <CheckCircle2 className="w-4 h-4 text-[#22C55E]" />,
+                  })
+                  // Instantly refresh attendance list from backend
+                  LecturerService.getLiveAttendance(maBuoiHoc)
+                    .then((data) => setStudents(data))
+                    .catch((err) => console.error("Lỗi cập nhật danh sách điểm danh:", err))
+                }}
+              />
             </div>
           </div>
         )}

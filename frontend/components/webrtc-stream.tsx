@@ -1,20 +1,99 @@
 "use client"
 
-import { useEffect, useRef, useState } from "react"
+import { useEffect, useRef, useState, useCallback } from "react"
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
 import { Video, VideoOff, ShieldAlert, Cpu } from "lucide-react"
 import { apiClient } from "@/lib/api-client"
 
-interface WebRTCStreamProps {
-  maBuoiHoc: number
-  onConnectionStateChange?: (state: string) => void
+export interface DetectionFace {
+  bbox: [number, number, number, number] // [x, y, w, h] in pixels
+  bbox_normalized?: [number, number, number, number] // [norm_x, norm_y, norm_w, norm_h]
+  student_id: string | number | null
+  student_name: string | null
+  score: number
+  detection_score?: number
+  recognized: boolean
+  attendance_status?: string
 }
 
-export function WebRTCStream({ maBuoiHoc, onConnectionStateChange }: WebRTCStreamProps) {
+export interface DetectionPayload {
+  type?: string
+  timestamp?: number
+  faces: DetectionFace[]
+  attendance_confirmed?: {
+    student_id: string | number
+    student_name: string
+  }
+}
+
+export interface WebRTCStreamProps {
+  maBuoiHoc: number
+  onConnectionStateChange?: (state: string) => void
+  onAttendanceMarked?: (student: { student_id: string | number; student_name: string }) => void
+}
+
+/**
+ * Pure bounding box coordinate transformation and visual styling helper.
+ * Exported for deterministic unit testing.
+ */
+export function computeBoundingBox(
+  face: DetectionFace,
+  canvasWidth: number,
+  canvasHeight: number,
+  isMirrored: boolean,
+  frameWidth = 640,
+  frameHeight = 480
+): { boxX: number; boxY: number; boxW: number; boxH: number; color: string; label: string } {
+  let norm_x: number, norm_y: number, norm_w: number, norm_h: number
+
+  if (face.bbox_normalized && face.bbox_normalized.length === 4) {
+    ;[norm_x, norm_y, norm_w, norm_h] = face.bbox_normalized
+  } else if (face.bbox && face.bbox.length === 4) {
+    const fw = frameWidth > 0 ? frameWidth : 640
+    const fh = frameHeight > 0 ? frameHeight : 480
+    norm_x = face.bbox[0] / fw
+    norm_y = face.bbox[1] / fh
+    norm_w = face.bbox[2] / fw
+    norm_h = face.bbox[3] / fh
+  } else {
+    norm_x = 0
+    norm_y = 0
+    norm_w = 0
+    norm_h = 0
+  }
+
+  const boxW = norm_w * canvasWidth
+  const boxH = norm_h * canvasHeight
+  const boxY = norm_y * canvasHeight
+
+  // Horizontal mirroring inversion logic: keeps box aligned with mirrored webcam feed
+  const boxX = isMirrored
+    ? canvasWidth - (norm_x * canvasWidth + boxW)
+    : norm_x * canvasWidth
+
+  const isRecognized = face.recognized === true
+  const color = isRecognized ? "#22C55E" : "#EF4444"
+  const label = isRecognized
+    ? `${face.student_id ? `${face.student_id} - ` : ""}${face.student_name || "Sinh viên"}${
+        face.score ? ` (${Math.round(face.score * 100)}%)` : ""
+      }`
+    : "Unknown"
+
+  return { boxX, boxY, boxW, boxH, color, label }
+}
+
+export function WebRTCStream({
+  maBuoiHoc,
+  onConnectionStateChange,
+  onAttendanceMarked,
+}: WebRTCStreamProps) {
   const localVideoRef = useRef<HTMLVideoElement>(null)
+  const overlayCanvasRef = useRef<HTMLCanvasElement>(null)
   const pcRef = useRef<RTCPeerConnection | null>(null)
   const localStreamRef = useRef<MediaStream | null>(null)
+  const dataChannelRef = useRef<RTCDataChannel | null>(null)
+  const staleTimerRef = useRef<NodeJS.Timeout | null>(null)
 
   const [streamActive, setStreamActive] = useState(false)
   const [iceConnectionState, setIceConnectionState] = useState("new")
@@ -24,6 +103,8 @@ export function WebRTCStream({ maBuoiHoc, onConnectionStateChange }: WebRTCStrea
   const [selectedCodec, setSelectedCodec] = useState("default")
   const [loading, setLoading] = useState(false)
   const [errorMsg, setErrorMsg] = useState<string | null>(null)
+  const [facesCount, setFacesCount] = useState(0)
+  const [mirrorVideo, setMirrorVideo] = useState(true)
 
   // WebRTC Simulator States & Refs
   const [videoSource, setVideoSource] = useState<"camera" | "mock">("camera")
@@ -116,6 +197,193 @@ export function WebRTCStream({ maBuoiHoc, onConnectionStateChange }: WebRTCStrea
     }
     reader.readAsDataURL(file)
   }
+
+  // Draw Bounding Boxes on Overlay Canvas
+  const drawOverlay = useCallback(
+    (faces: DetectionFace[]) => {
+      const canvas = overlayCanvasRef.current
+      const video = localVideoRef.current
+      if (!canvas) return
+
+      const ctx = canvas.getContext("2d")
+      if (!ctx) return
+
+      const rect = canvas.getBoundingClientRect()
+      const dpr = typeof window !== "undefined" ? window.devicePixelRatio || 1 : 1
+      const cw = rect.width > 0 ? Math.round(rect.width) : (canvas.clientWidth || 640)
+      const ch = rect.height > 0 ? Math.round(rect.height) : (canvas.clientHeight || 480)
+
+      if (canvas.width !== Math.round(cw * dpr) || canvas.height !== Math.round(ch * dpr)) {
+        canvas.width = Math.round(cw * dpr)
+        canvas.height = Math.round(ch * dpr)
+      }
+
+      ctx.save()
+      ctx.scale(dpr, dpr)
+      ctx.clearRect(0, 0, cw, ch)
+
+      if (!faces || faces.length === 0) {
+        ctx.restore()
+        return
+      }
+
+      const vw = video && video.videoWidth ? video.videoWidth : 640
+      const vh = video && video.videoHeight ? video.videoHeight : 480
+      const isMirrored = mirrorVideo && videoSource === "camera"
+
+      faces.forEach((face) => {
+        const { boxX, boxY, boxW, boxH, color, label } = computeBoundingBox(
+          face,
+          cw,
+          ch,
+          isMirrored,
+          vw,
+          vh
+        )
+
+        if (boxW <= 0 || boxH <= 0) return
+
+        // 1. Subtle background tint
+        ctx.fillStyle = face.recognized ? "rgba(34, 197, 94, 0.08)" : "rgba(239, 68, 68, 0.08)"
+        if (typeof (ctx as any).roundRect === "function") {
+          ctx.beginPath()
+          ;(ctx as any).roundRect(boxX, boxY, boxW, boxH, 4)
+          ctx.fill()
+        } else {
+          ctx.fillRect(boxX, boxY, boxW, boxH)
+        }
+
+        // 2. Bounding Box Border (2.5px)
+        ctx.strokeStyle = color
+        ctx.lineWidth = 2.5
+        ctx.beginPath()
+        if (typeof (ctx as any).roundRect === "function") {
+          ;(ctx as any).roundRect(boxX, boxY, boxW, boxH, 4)
+        } else {
+          ctx.rect(boxX, boxY, boxW, boxH)
+        }
+        ctx.stroke()
+
+        // 3. High-tech Corner Accents (length 12px)
+        const cLen = Math.min(12, boxW / 4, boxH / 4)
+        ctx.lineWidth = 3.5
+        ctx.strokeStyle = color
+
+        // Top-Left corner
+        ctx.beginPath()
+        ctx.moveTo(boxX, boxY + cLen)
+        ctx.lineTo(boxX, boxY)
+        ctx.lineTo(boxX + cLen, boxY)
+        ctx.stroke()
+
+        // Top-Right corner
+        ctx.beginPath()
+        ctx.moveTo(boxX + boxW - cLen, boxY)
+        ctx.lineTo(boxX + boxW, boxY)
+        ctx.lineTo(boxX + boxW, boxY + cLen)
+        ctx.stroke()
+
+        // Bottom-Left corner
+        ctx.beginPath()
+        ctx.moveTo(boxX, boxY + boxH - cLen)
+        ctx.lineTo(boxX, boxY + boxH)
+        ctx.lineTo(boxX + cLen, boxY + boxH)
+        ctx.stroke()
+
+        // Bottom-Right corner
+        ctx.beginPath()
+        ctx.moveTo(boxX + boxW - cLen, boxY + boxH)
+        ctx.lineTo(boxX + boxW, boxY + boxH)
+        ctx.lineTo(boxX + boxW, boxY + boxH - cLen)
+        ctx.stroke()
+
+        // 4. Label Pill Badge
+        ctx.font = "bold 11px system-ui, -apple-system, sans-serif"
+        const textMetrics = ctx.measureText(label)
+        const pillWidth = textMetrics.width + 16
+        const pillHeight = 22
+
+        // Position pill above box, or inside top if near upper canvas boundary
+        const pillY = boxY >= pillHeight + 4 ? boxY - pillHeight - 2 : boxY + 4
+        const pillX = Math.max(0, Math.min(boxX, cw - pillWidth))
+
+        ctx.fillStyle = color
+        ctx.beginPath()
+        if (typeof (ctx as any).roundRect === "function") {
+          ;(ctx as any).roundRect(pillX, pillY, pillWidth, pillHeight, 4)
+        } else {
+          ctx.fillRect(pillX, pillY, pillWidth, pillHeight)
+        }
+        ctx.fill()
+
+        // 5. Label Text (White, legible, upright left-to-right)
+        ctx.fillStyle = "#FFFFFF"
+        ctx.textAlign = "left"
+        ctx.textBaseline = "middle"
+        ctx.fillText(label, pillX + 8, pillY + pillHeight / 2)
+      })
+
+      ctx.restore()
+    },
+    [mirrorVideo, videoSource]
+  )
+
+  // Handle incoming DataChannel messages
+  const handleDataMessage = useCallback(
+    (event: MessageEvent) => {
+      try {
+        const data: DetectionPayload =
+          typeof event.data === "string" ? JSON.parse(event.data) : event.data
+
+        if (data.faces && Array.isArray(data.faces)) {
+          setFacesCount(data.faces.length)
+          drawOverlay(data.faces)
+
+          // Reset 1500ms stale debounce
+          if (staleTimerRef.current) clearTimeout(staleTimerRef.current)
+          staleTimerRef.current = setTimeout(() => {
+            drawOverlay([])
+            setFacesCount(0)
+          }, 1500)
+        }
+
+        // Attendance confirmation callback
+        if (data.attendance_confirmed && onAttendanceMarked) {
+          onAttendanceMarked(data.attendance_confirmed)
+        } else if (data.faces && onAttendanceMarked) {
+          for (const f of data.faces) {
+            if (f.attendance_status === "NEWLY_MARKED" && f.student_id) {
+              onAttendanceMarked({
+                student_id: f.student_id,
+                student_name: f.student_name || "Sinh viên",
+              })
+              break
+            }
+          }
+        }
+      } catch (e) {
+        // Non-JSON or ping message
+      }
+    },
+    [drawOverlay, onAttendanceMarked]
+  )
+
+  // Setup WebRTC DataChannel listeners
+  const setupDataChannel = useCallback(
+    (dc: RTCDataChannel) => {
+      dc.onopen = () => {
+        console.log(`[WebRTC] DataChannel '${dc.label}' opened successfully`)
+      }
+      dc.onmessage = handleDataMessage
+      dc.onclose = () => {
+        console.log(`[WebRTC] DataChannel '${dc.label}' closed`)
+      }
+      dc.onerror = (err) => {
+        console.error(`[WebRTC] DataChannel '${dc.label}' error:`, err)
+      }
+    },
+    [handleDataMessage]
+  )
 
   // Generate mock canvas video stream for testing
   const startMockStream = (): MediaStream => {
@@ -251,9 +519,21 @@ export function WebRTCStream({ maBuoiHoc, onConnectionStateChange }: WebRTCStrea
   const stopStream = () => {
     setLoading(true)
     try {
+      if (staleTimerRef.current) {
+        clearTimeout(staleTimerRef.current)
+        staleTimerRef.current = null
+      }
+
       if (animationFrameIdRef.current) {
         cancelAnimationFrame(animationFrameIdRef.current)
         animationFrameIdRef.current = null
+      }
+
+      if (dataChannelRef.current) {
+        try {
+          dataChannelRef.current.close()
+        } catch (e) {}
+        dataChannelRef.current = null
       }
 
       if (localStreamRef.current) {
@@ -281,6 +561,8 @@ export function WebRTCStream({ maBuoiHoc, onConnectionStateChange }: WebRTCStrea
         localVideoRef.current.srcObject = null
       }
 
+      drawOverlay([])
+      setFacesCount(0)
       setStreamActive(false)
       setIceConnectionState("closed")
       setIceGatheringState("complete")
@@ -307,6 +589,16 @@ export function WebRTCStream({ maBuoiHoc, onConnectionStateChange }: WebRTCStrea
 
       const pc = new RTCPeerConnection(config)
       pcRef.current = pc
+
+      // Proactively create DataChannel with label "faces" before createOffer
+      const dc = pc.createDataChannel("faces", { ordered: false })
+      dataChannelRef.current = dc
+      setupDataChannel(dc)
+
+      // Listen on pc.ondatachannel
+      pc.ondatachannel = (event) => {
+        setupDataChannel(event.channel)
+      }
 
       // Listeners
       pc.addEventListener("icegatheringstatechange", () => {
@@ -411,8 +703,16 @@ export function WebRTCStream({ maBuoiHoc, onConnectionStateChange }: WebRTCStrea
   // Cleanup on unmount
   useEffect(() => {
     return () => {
+      if (staleTimerRef.current) {
+        clearTimeout(staleTimerRef.current)
+      }
       if (animationFrameIdRef.current) {
         cancelAnimationFrame(animationFrameIdRef.current)
+      }
+      if (dataChannelRef.current) {
+        try {
+          dataChannelRef.current.close()
+        } catch (e) {}
       }
       if (localStreamRef.current || pcRef.current) {
         if (localStreamRef.current) {
@@ -427,16 +727,26 @@ export function WebRTCStream({ maBuoiHoc, onConnectionStateChange }: WebRTCStrea
 
   return (
     <div className="flex flex-col h-full w-full bg-[#0D1117] rounded-xl overflow-hidden border border-[#2D3748] relative">
-      {/* Video stream container */}
+      {/* Video stream container with Canvas Overlay */}
       <div className="flex-1 relative bg-[#070A0F] flex items-center justify-center overflow-hidden min-h-[220px]">
         {streamActive ? (
-          <video
-            ref={localVideoRef}
-            autoPlay
-            playsInline
-            muted
-            className="w-full h-full object-cover transform -scale-x-100"
-          />
+          <>
+            <video
+              ref={localVideoRef}
+              autoPlay
+              playsInline
+              muted
+              className={cn(
+                "w-full h-full object-cover",
+                mirrorVideo && videoSource === "camera" && "transform -scale-x-100"
+              )}
+            />
+            {/* Transparent Canvas Overlay for Bounding Boxes */}
+            <canvas
+              ref={overlayCanvasRef}
+              className="absolute inset-0 w-full h-full pointer-events-none z-10"
+            />
+          </>
         ) : (
           <div className="text-center p-6 space-y-3 z-10">
             <div className="w-16 h-16 rounded-full bg-[#1A2536] flex items-center justify-center mx-auto text-[#64748B]">
@@ -451,9 +761,19 @@ export function WebRTCStream({ maBuoiHoc, onConnectionStateChange }: WebRTCStrea
           </div>
         )}
 
+        {/* Real-time Detections Count Badge */}
+        {streamActive && (
+          <div className="absolute top-3 right-3 bg-[#0D1117]/80 backdrop-blur-md px-3 py-1.5 rounded-full border border-[#2D3748] flex items-center gap-2 text-xs z-20">
+            <span className="w-2 h-2 rounded-full bg-[#0EA5E9] animate-pulse" />
+            <span className="font-mono text-[#94A3B8]">
+              {facesCount > 0 ? `${facesCount} khuôn mặt` : "Đang quét..."}
+            </span>
+          </div>
+        )}
+
         {/* Connection status overlay */}
         {streamActive && (
-          <div className="absolute top-3 left-3 bg-[#0D1117]/80 backdrop-blur-md px-3 py-1.5 rounded-full border border-[#2D3748] flex items-center gap-2 text-xs">
+          <div className="absolute top-3 left-3 bg-[#0D1117]/80 backdrop-blur-md px-3 py-1.5 rounded-full border border-[#2D3748] flex items-center gap-2 text-xs z-20">
             <span
               className={cn(
                 "w-2 h-2 rounded-full",
@@ -482,7 +802,11 @@ export function WebRTCStream({ maBuoiHoc, onConnectionStateChange }: WebRTCStrea
               <p className="text-sm font-semibold text-white">Lỗi kết nối WebRTC</p>
               <p className="text-xs text-[#EF4444]/90 max-w-[280px]">{errorMsg}</p>
             </div>
-            <Button size="sm" onClick={() => setErrorMsg(null)} className="bg-[#1F2937] hover:bg-[#374151] text-xs">
+            <Button
+              size="sm"
+              onClick={() => setErrorMsg(null)}
+              className="bg-[#1F2937] hover:bg-[#374151] text-xs"
+            >
               Đóng thông báo
             </Button>
           </div>
@@ -494,7 +818,9 @@ export function WebRTCStream({ maBuoiHoc, onConnectionStateChange }: WebRTCStrea
         <div className="flex items-center justify-between gap-3">
           <div className="flex items-center gap-2 text-[#64748B] text-xs">
             <Cpu className="w-4 h-4 text-[#0EA5E9]" />
-            <span>Mạng weekday thập: <strong className="text-gray-300">{iceGatheringState}</strong></span>
+            <span>
+              Mạng weekday thập: <strong className="text-gray-300">{iceGatheringState}</strong>
+            </span>
           </div>
 
           <div className="flex gap-2">
@@ -527,19 +853,32 @@ export function WebRTCStream({ maBuoiHoc, onConnectionStateChange }: WebRTCStrea
           </div>
         </div>
 
-        {/* Video Source Selection */}
+        {/* Video Source Selection & Mirror Toggle */}
         <div className="flex flex-col gap-2 pt-2 border-t border-[#2D3748]/50 text-[10px] space-y-1">
           <div className="flex items-center justify-between gap-2">
             <span className="text-[#64748B]">Nguồn camera:</span>
-            <select
-              value={videoSource}
-              onChange={(e) => setVideoSource(e.target.value as any)}
-              disabled={streamActive}
-              className="bg-[#0D1117] border border-[#2D3748] rounded px-1.5 py-0.5 text-[10px] text-gray-300 focus:outline-none focus:border-[#0EA5E9] cursor-pointer"
-            >
-              <option value="camera">Webcam thực tế</option>
-              <option value="mock">Mô phỏng AI (Chọn ảnh)</option>
-            </select>
+            <div className="flex items-center gap-2">
+              {videoSource === "camera" && (
+                <label className="flex items-center gap-1 text-[#64748B] cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={mirrorVideo}
+                    onChange={(e) => setMirrorVideo(e.target.checked)}
+                    className="rounded bg-[#0D1117] border-[#2D3748] text-[#0EA5E9]"
+                  />
+                  <span>Lật gương</span>
+                </label>
+              )}
+              <select
+                value={videoSource}
+                onChange={(e) => setVideoSource(e.target.value as any)}
+                disabled={streamActive}
+                className="bg-[#0D1117] border border-[#2D3748] rounded px-1.5 py-0.5 text-[10px] text-gray-300 focus:outline-none focus:border-[#0EA5E9] cursor-pointer"
+              >
+                <option value="camera">Webcam thực tế</option>
+                <option value="mock">Mô phỏng AI (Chọn ảnh)</option>
+              </select>
+            </div>
           </div>
 
           {videoSource === "mock" && (

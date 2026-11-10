@@ -54,6 +54,7 @@ migrate_local_to_cloudinary.py
 read_docx.py
 reset_pw.py
 run_*.py
+!run_e2e_tests.py
 scratch_comprehensive_scan.py
 
 # Scratch scripts directory
