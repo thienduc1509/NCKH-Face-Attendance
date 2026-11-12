@@ -104,7 +104,10 @@ export function Sidebar({ role, user, className }: SidebarProps) {
       <nav className="flex-1 overflow-y-auto py-4">
         <ul className="space-y-1 px-2">
           {navItems.map((item) => {
-            const isActive = pathname === item.href || pathname.startsWith(item.href + "/")
+            const isRootRolePath = item.href === "/admin" || item.href === "/lecturer" || item.href === "/student"
+            const isActive = isRootRolePath
+              ? pathname === item.href
+              : pathname === item.href || pathname.startsWith(item.href + "/")
             return (
               <li key={item.href}>
                 <Link
@@ -112,7 +115,7 @@ export function Sidebar({ role, user, className }: SidebarProps) {
                   className={cn(
                     "flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all",
                     isActive
-                      ? "bg-[#EFF6FF] text-[#0A2540] border-l-4 border-[#0EA5E9] -ml-0.5"
+                      ? "bg-[#EFF6FF] text-[#0A2540] dark:bg-[#1E293B] dark:text-[#38BDF8] border-l-4 border-[#0EA5E9] -ml-0.5"
                       : "text-white/80 hover:bg-[#1A3A5C] hover:text-white",
                     collapsed && "justify-center px-2"
                   )}

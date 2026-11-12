@@ -110,8 +110,14 @@
   .bg-\[\#F8FAFC\] {
     background-color: var(--background) !important;
   }
-  .bg-\[\#F1F5F9\], .bg-slate-100 {
+  .bg-\[\#F1F5F9\], .bg-slate-100, .bg-slate-200, .bg-gray-50, .bg-gray-100, .bg-gray-200, .bg-slate-50 {
     background-color: var(--secondary) !important;
+  }
+  .from-slate-100.to-slate-200 {
+    background-image: linear-gradient(to bottom right, #1E293B, #334155) !important;
+  }
+  .bg-\[\#EFF6FF\] {
+    background-color: rgba(14, 165, 233, 0.15) !important;
   }
 
   /* Override hardcoded dark text colors in dark mode */
