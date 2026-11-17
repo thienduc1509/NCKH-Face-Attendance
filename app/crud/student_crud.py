@@ -4,7 +4,7 @@ Student CRUD operations.
 Contains database operations for student profiles.
 """
 
-from sqlalchemy import or_
+from sqlalchemy import or_, text
 from sqlmodel import Session, col, func, select
 
 from app.models import Student, StudentCreate, StudentUpdate
@@ -66,12 +66,41 @@ def get_students(
     return list(students), count
 
 
+def get_next_student_id(session: Session) -> int:
+    """Kiểm tra có sinh viên trong hệ thống hay không rồi mới tự động tăng.
+
+    Nếu chưa có sinh viên nào, trả về 1.
+    Nếu đã có sinh viên, lấy MAX(student_id) + 1.
+    Không bao giờ phụ thuộc vào sequence cũ để tránh nhảy cóc ID.
+    """
+    max_id = session.exec(select(func.max(Student.student_id))).one()
+    if max_id is None or max_id <= 0:
+        return 1
+    return int(max_id) + 1
+
+
+def sync_student_id_sequence(session: Session) -> None:
+    """Đồng bộ PostgreSQL sequence với MAX(student_id) thực tế."""
+    max_id = session.exec(select(func.max(Student.student_id))).one()
+    try:
+        if max_id is None or max_id <= 0:
+            session.exec(text("SELECT setval('students_student_id_seq', 1, false)"))
+        else:
+            session.exec(text(f"SELECT setval('students_student_id_seq', {int(max_id)}, true)"))
+        session.commit()
+    except Exception:
+        pass
+
+
 def create_student(*, session: Session, student_create: StudentCreate) -> Student:
-    """Tao last_name so sinh vien moi."""
+    """Tao ho so sinh vien moi voi ID kiem tra ton tai thuc te."""
     db_student = Student.model_validate(student_create)
+    if db_student.student_id is None:
+        db_student.student_id = get_next_student_id(session)
     session.add(db_student)
     session.commit()
     session.refresh(db_student)
+    sync_student_id_sequence(session)
     return db_student
 
 

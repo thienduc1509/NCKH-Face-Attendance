@@ -41,7 +41,11 @@ def get_today_schedule_by_student(
             ClassSection.status.is_(True),
             (ClassSession.status == "DANG_DIEN_RA") if active_only else (ClassSession.class_date == target_date),
         )
-        .order_by(ClassSession.start_time, ClassSection.class_section_id)
+        .order_by(
+            ClassSession.start_time,
+            ClassSection.class_section_id,
+            ClassSession.session_number,
+        )
     )
 
     rows = session.exec(statement).all()

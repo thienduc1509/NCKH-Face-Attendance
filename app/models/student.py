@@ -104,6 +104,7 @@ class StudentAttendanceItem(SQLModel):
     """Represent attendance record item for current student."""
 
     attendance_id: int
+    class_session_id: int | None = None
     class_section_id: int
     course_name: str
     class_date: date

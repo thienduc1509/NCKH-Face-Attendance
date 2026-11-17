@@ -8,7 +8,10 @@ function Table({ className, ...props }: React.ComponentProps<'table'>) {
   return (
     <div
       data-slot="table-container"
-      className="relative w-full overflow-x-auto"
+      role="region"
+      tabIndex={0}
+      aria-label={props['aria-label'] || 'Bảng dữ liệu'}
+      className="relative w-full overflow-x-auto focus-visible:outline-2 focus-visible:outline-ring/50 focus-visible:outline-offset-2 rounded-md"
     >
       <table
         data-slot="table"

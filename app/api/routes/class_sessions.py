@@ -1,6 +1,10 @@
+from datetime import datetime, time
 from typing import Any
+from zoneinfo import ZoneInfo
 
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy import delete
+from sqlmodel import select
 
 from app.api.deps import (
     CurrentAccount,
@@ -10,6 +14,10 @@ from app.api.deps import (
     get_current_active_superuser,
 )
 from app.models import (
+    Appeal,
+    Attendance,
+    AttendanceImage,
+    ClassSession,
     ClassSessionCreate,
     ClassSessionPublic,
     ClassSessionsPublic,
@@ -19,6 +27,31 @@ from app.models import (
 from app.services import timetable_service
 
 router = APIRouter(prefix="/class-sessions", tags=["class-sessions"])
+
+
+def _delete_attendance_for_sessions(
+    session: SessionDep, session_ids: list[int]
+) -> None:
+    """Remove attendance records and dependent appeal/image rows for sessions."""
+    if not session_ids:
+        return
+    att_ids = [
+        aid
+        for aid in session.exec(
+            select(Attendance.attendance_id).where(
+                Attendance.class_session_id.in_(session_ids)
+            )
+        ).all()
+        if aid is not None
+    ]
+    if att_ids:
+        session.execute(delete(Appeal).where(Appeal.attendance_id.in_(att_ids)))
+        session.execute(
+            delete(AttendanceImage).where(AttendanceImage.attendance_id.in_(att_ids))
+        )
+    session.execute(
+        delete(Attendance).where(Attendance.class_session_id.in_(session_ids))
+    )
 
 
 @router.get("/", response_model=ClassSessionsPublic)
@@ -155,9 +188,103 @@ def cancel_class_session_by_lecturer(
     )
 
 
-from fastapi import HTTPException
+@router.post(
+    "/class-sections/{class_section_id}/reset-test-session",
+    dependencies=[Depends(get_current_active_lecturer)],
+)
+def reset_and_create_test_session(
+    session: SessionDep,
+    current_account: CurrentAccount,
+    class_section_id: int,
+) -> Any:
+    """Delete old sessions of a class section and open one fresh live test session."""
+    timetable_service.ensure_can_manage_class_section(
+        session=session,
+        current_account=current_account,
+        class_section_id=class_section_id,
+    )
+    session_ids = [
+        sid
+        for sid in session.exec(
+            select(ClassSession.class_session_id).where(
+                ClassSession.class_section_id == class_section_id
+            )
+        ).all()
+        if sid is not None
+    ]
+    if session_ids:
+        _delete_attendance_for_sessions(session, session_ids)
+        session.execute(
+            delete(ClassSession).where(ClassSession.class_section_id == class_section_id)
+        )
 
-from app.models import ClassSession
+    now_vn = datetime.now(ZoneInfo("Asia/Ho_Chi_Minh"))
+    new_session = ClassSession(
+        class_section_id=class_section_id,
+        session_number=1,
+        class_date=now_vn.date(),
+        start_time=now_vn.time().replace(microsecond=0),
+        end_time=time(23, 59),
+        late_grace_minutes=60,
+        recognition_threshold=0.6,
+        status="DANG_DIEN_RA",
+        note="Phiên Test Thử Nghiệm AI với Sinh Viên",
+    )
+    session.add(new_session)
+    session.commit()
+    session.refresh(new_session)
+    return timetable_service.get_lesson_detail(
+        session=session,
+        current_account=current_account,
+        class_session_id=new_session.class_session_id,
+    )
+
+
+@router.post(
+    "/{class_session_id}/reset-attendance",
+    dependencies=[Depends(get_current_active_lecturer)],
+)
+def reset_session_attendance(
+    session: SessionDep,
+    current_account: CurrentAccount,
+    class_session_id: int,
+) -> Any:
+    """Clear attendance records for a live session so students can test again."""
+    item = session.get(ClassSession, class_session_id)
+    if not item:
+        raise HTTPException(status_code=404, detail="Buổi học không tồn tại")
+
+    timetable_service.ensure_can_manage_class_session(
+        session=session,
+        current_account=current_account,
+        class_session=item,
+    )
+    _delete_attendance_for_sessions(session, [class_session_id])
+
+    other_active = session.exec(
+        select(ClassSession).where(
+            ClassSession.class_section_id == item.class_section_id,
+            ClassSession.class_session_id != class_session_id,
+            ClassSession.status == "DANG_DIEN_RA",
+        )
+    ).all()
+    for other in other_active:
+        other.status = "DA_KET_THUC"
+        session.add(other)
+
+    now_vn = datetime.now(ZoneInfo("Asia/Ho_Chi_Minh"))
+    item.status = "DANG_DIEN_RA"
+    item.class_date = now_vn.date()
+    item.start_time = now_vn.time().replace(microsecond=0)
+    item.end_time = time(23, 59)
+    session.add(item)
+    session.commit()
+    session.refresh(item)
+    return timetable_service.get_lesson_detail(
+        session=session,
+        current_account=current_account,
+        class_session_id=item.class_session_id,
+    )
 
 
 @router.post(

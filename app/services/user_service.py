@@ -87,7 +87,10 @@ class UserService:
                 self.session.commit()
                 self.session.refresh(major)
 
+            from app.crud.student_crud import get_next_student_id, sync_student_id_sequence
+
             db_student = Student(
+                student_id=get_next_student_id(self.session),
                 last_name=account_in.last_name,
                 first_name=account_in.first_name,
                 google_email=account_in.email,
@@ -99,6 +102,7 @@ class UserService:
             self.session.add(db_student)
             self.session.commit()
             self.session.refresh(db_student)
+            sync_student_id_sequence(self.session)
 
         return db_account
 
@@ -386,7 +390,10 @@ class UserService:
                 self.session.commit()
                 self.session.refresh(major)
 
+            from app.crud.student_crud import get_next_student_id, sync_student_id_sequence
+
             db_student = Student(
+                student_id=get_next_student_id(self.session),
                 last_name=payload.last_name,
                 first_name=payload.first_name,
                 google_email=getattr(payload, "email", None) or payload.username,
@@ -397,6 +404,7 @@ class UserService:
             )
             self.session.add(db_student)
             self.session.commit()
+            sync_student_id_sequence(self.session)
         elif db_role == "GIANG_VIEN":
             db_staff = Staff(
                 last_name=payload.last_name,

@@ -17,6 +17,8 @@ import {
 } from "@/components/ui/select"
 import { Loader2, AlertCircle, BarChart3, Download, Users, CheckCircle, BookOpen } from "lucide-react"
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts'
+import { Toaster } from "@/components/ui/sonner"
+import { toast } from "sonner"
 
 export default function LecturerReportsPage() {
   const [lecturerUser, setLecturerUser] = useState({
@@ -29,6 +31,7 @@ export default function LecturerReportsPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [selectedReportId, setSelectedReportId] = useState<string | null>(null)
+  const [isExporting, setIsExporting] = useState(false)
 
   const fetchReports = async () => {
     setLoading(true)
@@ -67,6 +70,25 @@ export default function LecturerReportsPage() {
 
   const selectedReport = reports.find(r => r.id === selectedReportId) || reports[0]
 
+  const handleExport = async () => {
+    const classSectionId = Number(selectedReportId)
+    if (!selectedReportId || !Number.isFinite(classSectionId)) {
+      toast.error("Vui lòng chọn lớp học phần cần xuất báo cáo.")
+      return
+    }
+    setIsExporting(true)
+    const toastId = toast.loading("Đang khởi tạo và tải file Excel...")
+    try {
+      await LecturerService.downloadAttendanceReport(classSectionId, "excel")
+      toast.success("Đã xuất báo cáo điểm danh thành công!", { id: toastId })
+    } catch (err: any) {
+      console.error("Lỗi xuất báo cáo điểm danh:", err)
+      toast.error(`Xuất báo cáo thất bại: ${err?.message || "Không thể tải file."}`, { id: toastId })
+    } finally {
+      setIsExporting(false)
+    }
+  }
+
   return (
     <AppShell
       role="lecturer"
@@ -79,9 +101,13 @@ export default function LecturerReportsPage() {
             <h1 className="text-2xl font-bold text-[#0F172A]">Báo cáo chuyên cần</h1>
             <p className="text-[#64748B] mt-1">Theo dõi và phân tích tình hình học tập của sinh viên</p>
           </div>
-          <Button disabled={!selectedReport || loading} className="bg-[#0A2540] hover:bg-[#1A3A5C] shrink-0">
-            <Download className="w-4 h-4 mr-2" />
-            Xuất Excel
+          <Button
+            onClick={handleExport}
+            disabled={!selectedReport || loading || isExporting}
+            className="bg-[#0A2540] hover:bg-[#1A3A5C] shrink-0"
+          >
+            {isExporting ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Download className="w-4 h-4 mr-2" />}
+            {isExporting ? "Đang xuất..." : "Xuất Excel"}
           </Button>
         </div>
 
@@ -254,6 +280,7 @@ export default function LecturerReportsPage() {
             </div>
         )}
       </div>
+      <Toaster richColors position="top-right" />
     </AppShell>
   )
 }

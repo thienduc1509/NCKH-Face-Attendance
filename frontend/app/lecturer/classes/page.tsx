@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation"
 import { AppShell } from "@/components/app-shell"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { cn } from "@/lib/utils"
+import { cn, formatDateVN } from "@/lib/utils"
 import { CourseClass } from "@/types/class"
 import { ClassService } from "@/services/class.service"
 import { LecturerService } from "@/services/lecturer.service"
@@ -34,6 +34,7 @@ import {
   ArrowDown,
   PlusCircle,
   CheckCircle2,
+  RotateCcw,
 } from "lucide-react"
 
 
@@ -91,6 +92,7 @@ export default function LecturerClassesPage() {
 
   // Form Visibility State (Ban đầu vào sẽ ẩn Form)
   const [isFormOpen, setIsFormOpen] = useState(false)
+  const [testSessionCreating, setTestSessionCreating] = useState(false)
 
 
   const fetchProfileAndClasses = async () => {
@@ -229,7 +231,7 @@ export default function LecturerClassesPage() {
       session_number: sessionItem?.session_number?.toString() || "",
       late_grace_minutes: "15",
       recognition_threshold: "0.6",
-      note: `Học bù cho Buổi ${sessionItem?.session_number || ""} ngày ${sessionItem?.class_date || ""} bị hoãn`,
+      note: `Học bù cho Buổi ${sessionItem?.session_number || ""} ngày ${formatDateVN(sessionItem?.class_date)} bị hoãn`,
     })
     // Scroll smoothly to form
     window.scrollTo({ top: 400, behavior: "smooth" })
@@ -261,6 +263,20 @@ export default function LecturerClassesPage() {
       router.push(`/lecturer/live/${maBuoiHoc}`)
     } catch {
       alert("Khong the mo phien diem danh.")
+    }
+  }
+
+  const handleCreateTestSession = async () => {
+    if (!selectedClass || testSessionCreating) return
+    if (!confirm(`Xóa sạch các buổi học cũ của "${selectedClass.tenHocPhan}" và mở 1 phiên test thử nghiệm mới?`)) return
+    setTestSessionCreating(true)
+    try {
+      const created = await LecturerService.resetAndCreateTestSession(selectedClass.id)
+      router.push(`/lecturer/live/${created.class_session_id}`)
+    } catch {
+      alert("Không thể tạo phiên test thử nghiệm.")
+    } finally {
+      setTestSessionCreating(false)
     }
   }
 
@@ -466,6 +482,19 @@ export default function LecturerClassesPage() {
                   <div className="flex flex-wrap gap-2">
                     <Button
                       variant="outline"
+                      disabled={testSessionCreating}
+                      className="border-[#D97706] bg-[#FFFBEB] text-[#B45309] hover:bg-[#FEF3C7]"
+                      onClick={handleCreateTestSession}
+                    >
+                      {testSessionCreating ? (
+                        <Loader2 className="w-4 h-4 mr-1.5 animate-spin" />
+                      ) : (
+                        <RotateCcw className="w-4 h-4 mr-1.5" />
+                      )}
+                      Xóa buổi cũ & Tạo Phiên Test
+                    </Button>
+                    <Button
+                      variant="outline"
                       className="border-[#0EA5E9] text-[#0EA5E9] hover:bg-[#EAFAFF]"
                       onClick={() => viewClassStudents(selectedClass)}
                     >
@@ -500,7 +529,7 @@ export default function LecturerClassesPage() {
                         <div>
                           <div className="flex items-center gap-2 font-bold text-[#0F172A] text-base">
                             <CalendarDays className="w-4 h-4 text-[#0EA5E9]" />
-                            Buổi {session.session_number || "-"} - {session.class_date}
+                            Buổi {session.session_number || "-"} - {formatDateVN(session.class_date)}
                           </div>
                           <div className="mt-1.5 flex flex-wrap items-center gap-3 text-xs text-[#64748B]">
                             <span className="inline-flex items-center gap-1 bg-slate-50 px-2 py-0.5 rounded border border-slate-200 text-slate-700">
@@ -789,7 +818,7 @@ export default function LecturerClassesPage() {
               Xác nhận Hoãn Buổi Học
             </DialogTitle>
             <DialogDescription className="text-xs text-[#64748B]">
-              Lớp: <b>{selectedClass?.tenHocPhan}</b> — Buổi số <b>{postponingSession?.session_number}</b> ({postponingSession?.class_date})
+              Lớp: <b>{selectedClass?.tenHocPhan}</b> — Buổi số <b>{postponingSession?.session_number}</b> ({formatDateVN(postponingSession?.class_date)})
             </DialogDescription>
           </DialogHeader>
 
@@ -842,7 +871,7 @@ export default function LecturerClassesPage() {
               Hoãn Buổi Học Thành Công!
             </DialogTitle>
             <DialogDescription className="text-sm text-[#475569] mt-1 leading-relaxed">
-              Buổi học số <b>{postponedSessionForMakeup?.session_number}</b> ({postponedSessionForMakeup?.class_date}) môn <b>{selectedClass?.tenHocPhan}</b> đã được chuyển sang trạng thái <b>Đã hoãn học</b>.
+              Buổi học số <b>{postponedSessionForMakeup?.session_number}</b> ({formatDateVN(postponedSessionForMakeup?.class_date)}) môn <b>{selectedClass?.tenHocPhan}</b> đã được chuyển sang trạng thái <b>Đã hoãn học</b>.
             </DialogDescription>
           </DialogHeader>
 

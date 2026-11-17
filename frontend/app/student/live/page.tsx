@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useRef } from "react"
+import { useState, useEffect, useRef, useCallback } from "react"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
@@ -17,7 +17,8 @@ import {
   User,
   CheckCircle2,
   AlertTriangle,
-  Loader2
+  Loader2,
+  RefreshCw
 } from "lucide-react"
 
 import { StudentService } from "@/services/student.service"
@@ -45,16 +46,27 @@ export default function StudentLiveClassroom() {
   const [isSessionActive, setIsSessionActive] = useState(true)
   const [apiError, setApiError] = useState<string | null>(null)
   const [lastVerifiedTime, setLastVerifiedTime] = useState<string | null>(null)
+  const [isManualScanning, setIsManualScanning] = useState(false)
+  const isVerifiedRef = useRef(false)
+  const lastVerifiedEpochRef = useRef(0)
+  const isVerifyingRef = useRef(false)
 
   useEffect(() => {
+    isVerifiedRef.current = verificationStatus === "verified"
+  }, [verificationStatus])
+
+  useEffect(() => {
+    let disposed = false
     const params = new URLSearchParams(window.location.search)
     const idVal = params.get("id")
-    if (idVal) {
-      const idNum = parseInt(idVal)
-      setMaBuoiHoc(idNum)
+    const sessionId = idVal ? parseInt(idVal) : null
 
-      apiClient.get<any>(`/class-sessions/${idNum}`)
+    if (sessionId) {
+      setMaBuoiHoc(sessionId)
+
+      apiClient.get<any>(`/class-sessions/${sessionId}`)
         .then((buoiHoc) => {
+          if (disposed) return
           setSessionNum(buoiHoc.session_number || 1)
           const active = buoiHoc.status === "DANG_DIEN_RA"
           setIsSessionActive(active)
@@ -67,10 +79,72 @@ export default function StudentLiveClassroom() {
           }
         })
         .catch((err) => {
+          if (disposed) return
           console.error("Lỗi tải thông tin buổi học:", err)
           setApiError("Không thể tải thông tin buổi học thực tế")
           setVerificationStatus("failed")
         })
+    }
+
+    const syncActiveSession = async () => {
+      const syncStartedAt = Date.now()
+      try {
+        const [schedule, attendanceList] = await Promise.all([
+          StudentService.getSchedule(),
+          StudentService.getAttendance().catch(() => null),
+        ])
+        if (disposed) return
+        const current = sessionId
+          ? schedule.find((s) => String(s.class_session_id) === String(sessionId))
+          : undefined
+
+        if (current) {
+          if (current.session_number) setSessionNum(current.session_number)
+          if (current.course_name) setSubjectName(current.course_name)
+        }
+
+        if (!current || current.status !== "DANG_DIEN_RA") {
+          const activeSession = schedule.find((s) => s.status === "DANG_DIEN_RA")
+          if (activeSession && String(activeSession.class_session_id) !== String(sessionId ?? "")) {
+            window.location.replace(`/student/live?id=${activeSession.class_session_id}`)
+            return
+          } else if (current && current.status !== "DANG_DIEN_RA") {
+            setIsSessionActive(false)
+            setApiError("Phiên điểm danh chưa được mở hoặc đã kết thúc")
+            setVerificationStatus("failed")
+            return
+          }
+        }
+
+        if (
+          sessionId &&
+          Array.isArray(attendanceList) &&
+          isVerifiedRef.current &&
+          syncStartedAt > lastVerifiedEpochRef.current + 1500
+        ) {
+          const hasValidRecord = attendanceList.some(
+            (item) =>
+              String(item.class_session_id) === String(sessionId) &&
+              ["CO_MAT", "PRESENT", "DI_MUON", "MUON", "LATE"].includes(item.status)
+          )
+          if (!hasValidRecord) {
+            isVerifiedRef.current = false
+            setVerificationStatus("pending")
+            setConfidence(0)
+            setLastVerifiedTime(null)
+            setApiError(null)
+          }
+        }
+      } catch (err) {
+        console.error("Lỗi đồng bộ buổi học đang mở:", err)
+      }
+    }
+
+    syncActiveSession()
+    const syncTimer = setInterval(syncActiveSession, 5000)
+    return () => {
+      disposed = true
+      clearInterval(syncTimer)
     }
   }, [])
 
@@ -124,45 +198,65 @@ export default function StudentLiveClassroom() {
     });
   };
 
-  // Real AI verification loop
-  useEffect(() => {
-    if (!cameraEnabled) {
-      setVerificationStatus("pending");
-      return;
-    }
-    if (maBuoiHoc && !isSessionActive) {
-      setVerificationStatus("failed");
-      return;
-    }
+  const verifyNow = useCallback(async (manual = false) => {
+    if (!cameraEnabled || (maBuoiHoc && !isSessionActive) || isVerifyingRef.current) return;
+    const blob = await captureFrame();
+    if (!blob) return;
 
-    const verify = async () => {
-      const blob = await captureFrame();
-      if (!blob) return;
-
+    isVerifyingRef.current = true;
+    if (manual) setIsManualScanning(true);
+    try {
       const result = await StudentService.verifyFace(blob, maBuoiHoc || undefined);
       if (result.verified) {
+        isVerifiedRef.current = true;
+        lastVerifiedEpochRef.current = Date.now();
         setConfidence(result.confidence);
         setVerificationStatus("verified");
         setLastVerifiedTime(new Date().toLocaleTimeString("vi-VN"));
         setApiError(result.message || null);
       } else {
+        isVerifiedRef.current = false;
         setConfidence(result.confidence || 0);
         setVerificationStatus("failed");
         setApiError(result.message || "Xác minh thất bại");
       }
-    };
+    } finally {
+      isVerifyingRef.current = false;
+      if (manual) setIsManualScanning(false);
+    }
+  }, [cameraEnabled, maBuoiHoc, isSessionActive]);
+
+  // Real AI verification loop
+  useEffect(() => {
+    if (!cameraEnabled) {
+      isVerifiedRef.current = false;
+      setVerificationStatus("pending");
+      return;
+    }
+    if (maBuoiHoc && !isSessionActive) {
+      isVerifiedRef.current = false;
+      setVerificationStatus("failed");
+      return;
+    }
+    if (verificationStatus === "verified") {
+      return;
+    }
 
     // Initial check after 2 seconds
-    const initialTimer = setTimeout(verify, 2000);
+    const initialTimer = setTimeout(() => {
+      verifyNow(false);
+    }, 2000);
 
-    // Then check every 7 seconds
-    const intervalId = setInterval(verify, 7000);
+    // Then check every 5 seconds while not verified
+    const intervalId = setInterval(() => {
+      verifyNow(false);
+    }, 5000);
 
     return () => {
       clearTimeout(initialTimer);
       clearInterval(intervalId);
     };
-  }, [cameraEnabled, maBuoiHoc, isSessionActive]);
+  }, [cameraEnabled, maBuoiHoc, isSessionActive, verificationStatus, verifyNow]);
 
   const formatTime = (seconds: number) => {
     const hrs = Math.floor(seconds / 3600)
@@ -405,6 +499,21 @@ export default function StudentLiveClassroom() {
               Xác minh lần cuối: {lastVerifiedTime}
             </p>
           )}
+
+          <Button
+            type="button"
+            variant="outline"
+            disabled={!cameraEnabled || !isSessionActive || isManualScanning}
+            onClick={() => verifyNow(true)}
+            className="w-full border-[#0EA5E9]/40 bg-[#0EA5E9]/10 text-[#0EA5E9] hover:bg-[#0EA5E9]/20 hover:text-[#38BDF8] text-xs font-semibold"
+          >
+            {isManualScanning ? (
+              <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" />
+            ) : (
+              <RefreshCw className="w-3.5 h-3.5 mr-1.5" />
+            )}
+            Quét khuôn mặt ngay (Test AI)
+          </Button>
         </div>
 
         {/* Session Info */}

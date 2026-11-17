@@ -265,6 +265,8 @@ class FaceRecognitionService:
     def _sync_faiss_index_from_database(self) -> None:
         """Rebuild the FAISS index from approved database embeddings (128D)."""
         try:
+            self.index = faiss.IndexFlatIP(128)
+            self.names = []
             from app.core.db import engine
 
             with Session(engine) as session:

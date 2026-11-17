@@ -4,6 +4,8 @@
 @custom-variant dark (&:is(.dark *));
 
 :root {
+  color-scheme: light dark;
+
   /* AttendAI Design System */
   --color-primary: #0A2540;
   --color-primary-light: #1A3A5C;
@@ -75,6 +77,7 @@
 }
 
 .dark {
+  color-scheme: dark;
   --background: var(--color-dark-bg);
   --foreground: #F8FAFC;
   --card: var(--color-dark-panel);

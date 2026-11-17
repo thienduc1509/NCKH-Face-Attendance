@@ -20,7 +20,7 @@ import {
 } from "lucide-react"
 import Link from "next/link"
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5050/api";
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "/api";
 
 type UserRole = "student" | "lecturer" | "admin"
 
@@ -76,7 +76,7 @@ export function LoginForm({ onSubmit, onRegisterClick, isLocked = false, lockTim
 
       {/* Error Alert */}
       {errorMessage && (
-        <div className="mb-6 p-3.5 bg-[#FEE2E2] border border-[#FCA5A5] rounded-lg flex items-start gap-2.5 text-sm text-[#991B1B] animate-in fade-in">
+        <div id="login-error" role="alert" className="mb-6 p-3.5 bg-[#FEE2E2] border border-[#FCA5A5] rounded-lg flex items-start gap-2.5 text-sm text-[#991B1B] animate-in fade-in">
           <AlertTriangle className="w-5 h-5 text-[#DC2626] shrink-0 mt-0.5" />
           <span className="font-medium leading-tight">{errorMessage}</span>
         </div>
@@ -84,7 +84,7 @@ export function LoginForm({ onSubmit, onRegisterClick, isLocked = false, lockTim
 
       {/* Lock Alert */}
       {isLocked && (
-        <div className="mb-6 p-4 bg-[#FEE2E2] border border-[#FCA5A5] rounded-lg flex items-start gap-3">
+        <div role="alert" className="mb-6 p-4 bg-[#FEE2E2] border border-[#FCA5A5] rounded-lg flex items-start gap-3">
           <AlertTriangle className="w-5 h-5 text-[#DC2626] shrink-0 mt-0.5" />
           <div>
             <p className="text-sm font-medium text-[#991B1B]">Tài khoản tạm khóa</p>
@@ -101,7 +101,16 @@ export function LoginForm({ onSubmit, onRegisterClick, isLocked = false, lockTim
         <div className="relative">
           <User className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
           <Input
+            id="username"
+            name="username"
             type="text"
+            autoComplete="username"
+            autoCorrect="off"
+            autoCapitalize="none"
+            spellCheck={false}
+            enterKeyHint="next"
+            aria-invalid={Boolean(errorMessage)}
+            aria-describedby={errorMessage ? "login-error" : undefined}
             placeholder="Mã số sinh viên (MSSV) / Tên đăng nhập"
             value={email}
             onChange={(e) => { setEmail(e.target.value); setErrorMessage(""); }}
@@ -115,7 +124,13 @@ export function LoginForm({ onSubmit, onRegisterClick, isLocked = false, lockTim
         <div className="relative">
           <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
           <Input
+            id="password"
+            name="current-password"
             type={showPassword ? "text" : "password"}
+            autoComplete="current-password"
+            enterKeyHint="done"
+            aria-invalid={Boolean(errorMessage)}
+            aria-describedby={errorMessage ? "login-error" : undefined}
             placeholder="Mật khẩu"
             value={password}
             onChange={(e) => { setPassword(e.target.value); setErrorMessage(""); }}
@@ -125,6 +140,7 @@ export function LoginForm({ onSubmit, onRegisterClick, isLocked = false, lockTim
           />
           <button
             type="button"
+            aria-label={showPassword ? "Ẩn mật khẩu" : "Hiện mật khẩu"}
             onClick={() => setShowPassword(!showPassword)}
             className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
           >

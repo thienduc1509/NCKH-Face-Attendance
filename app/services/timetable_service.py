@@ -1,6 +1,8 @@
 """Provide timetable application services."""
 
+from datetime import datetime
 from typing import Any
+from zoneinfo import ZoneInfo
 
 from sqlmodel import Session
 
@@ -270,7 +272,10 @@ def open_attendance(
     class_session_id: int,
 ) -> Any:
     """Open attendance for a lesson."""
+    from sqlmodel import select
+
     from app.crud import class_session_crud
+    from app.models import ClassSession
 
     item = class_session_crud.get_class_session(
         session=session, class_session_id=class_session_id
@@ -286,7 +291,21 @@ def open_attendance(
     if item.status == "DA_HUY":
         raise LessonClosedError()
 
+    other_active_sessions = session.exec(
+        select(ClassSession).where(
+            ClassSession.class_section_id == item.class_section_id,
+            ClassSession.class_session_id != item.class_session_id,
+            ClassSession.status == "DANG_DIEN_RA",
+        )
+    ).all()
+    for other_session in other_active_sessions:
+        other_session.status = "DA_KET_THUC"
+        session.add(other_session)
+
+    now_vn = datetime.now(ZoneInfo("Asia/Ho_Chi_Minh"))
     item.status = "DANG_DIEN_RA"
+    item.class_date = now_vn.date()
+    item.start_time = now_vn.time().replace(microsecond=0)
     session.add(item)
     session.commit()
     session.refresh(item)

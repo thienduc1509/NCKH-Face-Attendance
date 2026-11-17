@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta
+from datetime import datetime, time, timedelta
 from zoneinfo import ZoneInfo
 
 from sqlmodel import Session, select
@@ -10,15 +10,19 @@ def calculate_attendance_status(
     class_session: ClassSession, current_time: datetime
 ) -> str:
     """Xác định trạng thái CO_MAT hoặc MUON dựa trên giờ bắt đầu và số phút muộn tối đa."""
-    if not class_session.start_time:
-        return "CO_MAT"  # Nếu không cấu hình giờ, mặc định là có mặt
+    if not class_session.start_time or class_session.start_time == time(0, 0):
+        return "CO_MAT"  # Nếu không cấu hình giờ hoặc phiên mở cả ngày 00:00, mặc định là có mặt
+
+    if current_time.tzinfo is not None:
+        current_time = current_time.astimezone(ZoneInfo("Asia/Ho_Chi_Minh")).replace(tzinfo=None)
+
+    if class_session.class_date != current_time.date():
+        return "CO_MAT"
 
     # Kết hợp ngày học và giờ học
     start_datetime = datetime.combine(
         class_session.class_date, class_session.start_time
     )
-    if current_time.tzinfo is not None:
-        current_time = current_time.astimezone(ZoneInfo("Asia/Ho_Chi_Minh")).replace(tzinfo=None)
     latest_on_time_datetime = start_datetime + timedelta(
         minutes=class_session.late_grace_minutes
     )

@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { StatusBadge, ConfidenceBadge } from "@/components/status-badge"
-import { cn } from "@/lib/utils"
+import { cn, formatDateVN } from "@/lib/utils"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Input } from "@/components/ui/input"
 import {
@@ -38,7 +38,8 @@ import {
   Download,
   FileSpreadsheet,
   FileText,
-  ChevronDown
+  ChevronDown,
+  RotateCcw
 } from "lucide-react"
 import { useParams, useRouter } from "next/navigation"
 import { apiClient } from "@/lib/api-client"
@@ -72,8 +73,10 @@ export default function LecturerLiveClassroom() {
   const [error, setError] = useState<string | null>(null)
   const [className, setClassName] = useState("Lớp học phần")
   const [sessionNum, setSessionNum] = useState(1)
+  const [sessionDate, setSessionDate] = useState("")
   const [classSectionId, setClassSectionId] = useState<number | null>(null)
   const [isExporting, setIsExporting] = useState(false)
+  const [isResetting, setIsResetting] = useState(false)
 
   const loadSessionData = async () => {
     if (!maBuoiHoc) return
@@ -83,6 +86,7 @@ export default function LecturerLiveClassroom() {
       const buoiHoc = await apiClient.get<any>(`/class-sessions/${maBuoiHoc}`)
       setLateMinutes(buoiHoc.late_grace_minutes || 15)
       setSessionNum(buoiHoc.session_number || 1)
+      setSessionDate(buoiHoc.class_date || "")
       setSessionActive(buoiHoc.status === "DANG_DIEN_RA")
       setClassName(buoiHoc.course_name || `Lớp học phần ${buoiHoc.class_section_id}`)
       if (buoiHoc.class_section_id) {
@@ -216,6 +220,25 @@ export default function LecturerLiveClassroom() {
     }
   }
 
+  const handleResetAttendance = async () => {
+    if (!maBuoiHoc || isResetting) return
+    if (!confirm("Xóa toàn bộ kết quả điểm danh của phiên này để các sinh viên test lại từ đầu?")) return
+    setIsResetting(true)
+    try {
+      await LecturerService.resetSessionAttendance(maBuoiHoc)
+      setSessionActive(true)
+      setSessionTime(0)
+      const attList = await LecturerService.getLiveAttendance(maBuoiHoc)
+      setStudents(attList)
+      toast.success("Đã xóa dữ liệu điểm danh cũ! Các sinh viên có thể bắt đầu điểm danh thử nghiệm lại.")
+    } catch (err: any) {
+      const msg = err?.response?.data?.detail || err?.message || "Không thể reset điểm danh."
+      toast.error(`Lỗi: ${typeof msg === "string" ? msg : JSON.stringify(msg)}`)
+    } finally {
+      setIsResetting(false)
+    }
+  }
+
   if (loading) {
     return (
       <div className="min-h-screen bg-[#0D1117] text-white flex items-center justify-center flex-col">
@@ -248,7 +271,7 @@ export default function LecturerLiveClassroom() {
           <div className="flex items-center gap-4">
             <h1 className="text-xl font-bold">{className}</h1>
             <span className="px-3 py-1 bg-[#22C55E]/20 text-[#22C55E] rounded-full text-sm font-medium">
-              Buổi {sessionNum}
+              Buổi {sessionNum} {sessionDate ? `(${formatDateVN(sessionDate)})` : ""}
             </span>
           </div>
           <div className="flex items-center gap-3">
@@ -297,6 +320,21 @@ export default function LecturerLiveClassroom() {
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
+
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={!maBuoiHoc || isResetting}
+              onClick={handleResetAttendance}
+              className="border-[#F59E0B]/40 bg-[#F59E0B]/10 text-[#F59E0B] hover:bg-[#F59E0B]/20 hover:text-[#F59E0B] text-xs font-semibold h-9 px-3 gap-1.5 transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {isResetting ? (
+                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+              ) : (
+                <RotateCcw className="w-3.5 h-3.5" />
+              )}
+              <span>{isResetting ? "Đang reset..." : "Reset Điểm Danh (Test Lại)"}</span>
+            </Button>
 
             <Button
               variant="outline"

@@ -222,6 +222,7 @@ def get_my_attendance(*, session: Session, account_id: int) -> dict[str, Any]:
     history = [
         {
             "attendance_id": attendance.attendance_id,
+            "class_session_id": attendance.class_session_id,
             "class_section_id": class_section.class_section_id,
             "course_name": course.course_name,
             "class_date": lesson.class_date,

@@ -1,5 +1,6 @@
 import { StudentProfile, StudentClaim } from "@/types/student";
 import { apiClient } from "@/lib/api-client";
+import { formatDateVN } from "@/lib/utils";
 
 export const StudentService = {
   getProfile: async (): Promise<StudentProfile> => {
@@ -16,10 +17,10 @@ export const StudentService = {
         phone: profile.phone || "Chưa cập nhật",
         department: profile.major_id?.toString() || "1",
         majorName: profile.major_name || "Công nghệ thông tin",
-        birthDate: profile.birth_date ? new Date(profile.birth_date).toLocaleDateString("vi-VN") : "Chưa cập nhật",
+        birthDate: profile.birth_date ? formatDateVN(profile.birth_date) : "Chưa cập nhật",
         gender: profile.gender || "Chưa cập nhật",
         academicStatus: profile.academic_status === true || profile.academic_status === "DANG_HOC" ? "Đang học" : "Thôi học",
-        studyStartedAt: profile.study_started_at ? new Date(profile.study_started_at).toLocaleDateString("vi-VN") : "N/A",
+        studyStartedAt: profile.study_started_at ? formatDateVN(profile.study_started_at) : "N/A",
         faceRegistered: !!profile.face_registered,
         registeredFacesCount: profile.registered_faces_count || 0,
       };
@@ -60,7 +61,7 @@ export const StudentService = {
         id: claim.appeal_id?.toString() || `CLM-${Math.random().toString(36).substring(7)}`,
         subjectCode: claim.course_id?.toString() || claim.class_section_id?.toString() || "N/A",
         subjectName: claim.course_name || `Lớp học phần ${claim.class_section_id || "N/A"}`,
-        date: claim.class_date ? new Date(claim.class_date).toLocaleDateString("vi-VN") : "N/A",
+        date: claim.class_date ? formatDateVN(claim.class_date) : "N/A",
         sessionNumber: claim.session_number || 1,
         currentStatus: claim.attendance_status === "DI_MUON" || claim.attendance_status === "MUON" ? "late" : "absent",
         reason: claim.reason || "No reason",

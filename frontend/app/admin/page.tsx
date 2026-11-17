@@ -130,7 +130,7 @@ export default function AdminDashboard() {
                     </div>
                   </div>
                   <p className="text-xs text-[#64748B] mt-4 font-normal">
-                    6 Sinh viên • 2 Giảng viên • 1 Quản trị viên
+                    {stats.total_students} Sinh viên • {stats.total_lecturers} Giảng viên • {stats.total_admins} Quản trị viên
                   </p>
                 </CardContent>
               </Card>
@@ -148,7 +148,7 @@ export default function AdminDashboard() {
                     </div>
                   </div>
                   <p className="text-xs text-[#F97316] mt-4 font-medium">
-                    3 lớp đang hoạt động
+                    {stats.total_classes} lớp đang hoạt động
                   </p>
                 </CardContent>
               </Card>

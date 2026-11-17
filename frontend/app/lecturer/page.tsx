@@ -20,7 +20,7 @@ import Link from "next/link"
 import { LecturerService } from "@/services/lecturer.service"
 import { ClassService } from "@/services/class.service"
 import { Claim } from "@/types/lecturer"
-import { cn } from "@/lib/utils"
+import { cn, formatDateVN } from "@/lib/utils"
 
 export default function LecturerDashboard() {
   const [profile, setProfile] = useState<{ name: string; email: string; maCanBo: number } | null>(null)
@@ -109,7 +109,7 @@ export default function LecturerDashboard() {
         setRecentSessions(recentSess.map((item: any) => ({
           id: item.class_section_id,
           subject: item.course_name || "Môn học",
-          date: item.class_date ? new Date(item.class_date).toLocaleDateString("vi-VN") : "N/A",
+          date: item.class_date ? formatDateVN(item.class_date) : "N/A",
           present: item.present_student_count || 0,
           late: item.late_student_count || 0,
           absent: item.absent_student_count || 0
@@ -274,16 +274,16 @@ export default function LecturerDashboard() {
             </div>
 
             {/* Today's Classes - Full Width Prominent Section */}
-            <Card className="border-[#0EA5E9]/30 bg-gradient-to-r from-white via-[#F8FAFC] to-[#F0F9FF] shadow-md">
-              <CardHeader className="pb-3 border-b border-[#E2E8F0]">
+            <Card className="border-[#0EA5E9]/30 bg-gradient-to-r from-white via-[#F8FAFC] to-[#F0F9FF] dark:from-[#0B1329] dark:via-[#0F172A] dark:to-[#111E38] dark:border-[#1E293B] shadow-md">
+              <CardHeader className="pb-3 border-b border-[#E2E8F0] dark:border-slate-800">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
                     <div className="w-3 h-3 rounded-full bg-[#0EA5E9] animate-pulse" />
-                    <CardTitle className="text-xl font-bold text-[#0F172A]">
+                    <CardTitle className="text-xl font-bold text-[#0F172A] dark:text-white">
                       Lịch Giảng Dạy Hôm Nay
                     </CardTitle>
                   </div>
-                  <span className="text-sm font-semibold text-[#0EA5E9] bg-[#E0F2FE] px-3 py-1 rounded-full">
+                  <span className="text-sm font-semibold text-[#0EA5E9] dark:text-[#38BDF8] bg-[#E0F2FE] dark:bg-[#0284C7]/20 border border-transparent dark:border-[#0EA5E9]/30 px-3 py-1 rounded-full">
                     📅 {new Date().toLocaleDateString("vi-VN", { weekday: 'long', year: 'numeric', month: 'numeric', day: 'numeric' })}
                   </span>
                 </div>
@@ -291,42 +291,42 @@ export default function LecturerDashboard() {
               <CardContent className="pt-4">
                 <div className="space-y-4">
                   {todayClasses.length === 0 ? (
-                    <div className="text-center py-8 text-[#64748B] text-base bg-white rounded-xl border border-dashed border-[#CBD5E1]">
+                    <div className="text-center py-8 text-[#64748B] dark:text-slate-400 text-base bg-white dark:bg-slate-900 rounded-xl border border-dashed border-[#CBD5E1] dark:border-slate-800">
                       🎉 Hôm nay bạn không có lịch giảng dạy nào. Tận hưởng thời gian nghỉ ngơi!
                     </div>
                   ) : (
                     todayClasses.map((cls) => (
                       <div
                         key={cls.id}
-                        className="flex flex-col md:flex-row md:items-center justify-between p-5 bg-white rounded-2xl border-2 border-[#E2E8F0] hover:border-[#0EA5E9] hover:shadow-md transition-all gap-4"
+                        className="flex flex-col md:flex-row md:items-center justify-between p-5 bg-white dark:bg-[#0A1628] rounded-2xl border-2 border-[#E2E8F0] dark:border-slate-800 hover:border-[#0EA5E9] dark:hover:border-[#0EA5E9] hover:shadow-md transition-all gap-4"
                       >
                         <div className="flex items-center gap-4">
-                          <div className="w-16 h-16 rounded-2xl bg-[#0A2540] flex flex-col items-center justify-center text-white shrink-0 shadow-sm border border-[#1A3A5C]">
+                          <div className="w-16 h-16 rounded-2xl bg-[#0A2540] dark:bg-[#071322] flex flex-col items-center justify-center text-white shrink-0 shadow-sm border border-[#1A3A5C]">
                             <span className="text-[11px] text-[#93C5FD] font-semibold uppercase tracking-wider">Tiết học</span>
                             <span className="text-base font-extrabold">Buổi {cls.session}</span>
                           </div>
                           <div className="space-y-1">
                             <div className="flex items-center gap-2.5 flex-wrap">
-                              <h3 className="font-extrabold text-[#0F172A] text-lg">{cls.subject}</h3>
+                              <h3 className="font-extrabold text-[#0F172A] dark:text-white text-lg">{cls.subject}</h3>
                               {cls.isOfficial ? (
-                                <span className="px-3 py-1 text-xs font-bold rounded-lg bg-[#DCFCE7] text-[#15803D] border border-[#86EFAC] flex items-center gap-1">
+                                <span className="px-3 py-1 text-xs font-bold rounded-lg bg-[#DCFCE7] dark:bg-[#14532D]/40 text-[#15803D] dark:text-[#4ADE80] border border-[#86EFAC] dark:border-[#22C55E]/40 flex items-center gap-1">
                                   ✓ Buổi chính khóa (QTV lập sẵn)
                                 </span>
                               ) : (
-                                <span className="px-3 py-1 text-xs font-bold rounded-lg bg-[#FFEDD5] text-[#C2410C] border border-[#FDBA74] flex items-center gap-1">
+                                <span className="px-3 py-1 text-xs font-bold rounded-lg bg-[#FFEDD5] dark:bg-[#7C2D12]/40 text-[#C2410C] dark:text-[#FB923C] border border-[#FDBA74] dark:border-[#F97316]/40 flex items-center gap-1">
                                   ⚡ Buổi học bù / Đổi lịch
                                 </span>
                               )}
                             </div>
-                            <div className="flex items-center gap-3 text-sm text-[#475569] pt-0.5">
-                              <span className="font-bold text-[#0A2540] bg-[#F1F5F9] px-2.5 py-0.5 rounded-md border border-[#E2E8F0]">🏛️ {cls.room}</span>
+                            <div className="flex items-center gap-3 text-sm text-[#475569] dark:text-slate-400 pt-0.5">
+                              <span className="font-bold text-[#0A2540] dark:text-slate-200 bg-[#F1F5F9] dark:bg-slate-800/80 px-2.5 py-0.5 rounded-md border border-[#E2E8F0] dark:border-slate-700">🏛️ {cls.room}</span>
                               <span>•</span>
-                              <span className="font-semibold text-[#0284C7]">👥 {cls.students} Sinh viên đăng ký</span>
+                              <span className="font-semibold text-[#0284C7] dark:text-[#38BDF8]">👥 {cls.students} Sinh viên đăng ký</span>
                             </div>
                           </div>
                         </div>
-                        <div className="flex items-center justify-between md:justify-end gap-4 shrink-0 pt-2 md:pt-0 border-t md:border-t-0 border-[#F1F5F9]">
-                          <div className="flex items-center gap-2 text-[#0F172A] bg-[#F8FAFC] px-4 py-2 rounded-xl border border-[#E2E8F0] text-sm font-bold shadow-xs">
+                        <div className="flex items-center justify-between md:justify-end gap-4 shrink-0 pt-2 md:pt-0 border-t md:border-t-0 border-[#F1F5F9] dark:border-slate-800">
+                          <div className="flex items-center gap-2 text-[#0F172A] dark:text-white bg-[#F8FAFC] dark:bg-slate-800 px-4 py-2 rounded-xl border border-[#E2E8F0] dark:border-slate-700 text-sm font-bold shadow-xs">
                             <Clock className="w-4 h-4 text-[#0EA5E9]" />
                             <span>{cls.time}</span>
                           </div>

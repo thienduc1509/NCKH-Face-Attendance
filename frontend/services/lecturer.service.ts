@@ -1,5 +1,6 @@
 import { Claim, AttendanceReport } from "@/types/lecturer";
 import { apiClient } from "@/lib/api-client";
+import { formatDateVN } from "@/lib/utils";
 
 export const LecturerService = {
   getProfile: async (): Promise<any> => {
@@ -32,7 +33,7 @@ export const LecturerService = {
         studentName: claim.student_full_name || "Unknown",
         subjectCode: claim.class_section_id?.toString() || "Unknown",
         subjectName: claim.course_name || "Lớp học phần",
-        date: claim.class_date ? new Date(claim.class_date).toLocaleDateString("vi-VN") : "N/A",
+        date: claim.class_date ? formatDateVN(claim.class_date) : "N/A",
         sessionNumber: claim.session_number || 0,
         currentStatus: claim.attendance_status === 'CO_MAT' ? 'present' : (claim.attendance_status === 'DI_MUON' ? 'late' : 'absent'),
         reason: claim.reason || "",
@@ -271,7 +272,7 @@ export const LecturerService = {
       ? `/reports/class-sections/${maLopHocPhan}/attendance?format=csv`
       : `/reports/class-sections/${maLopHocPhan}/attendance?format=xlsx`;
     const token = typeof window !== "undefined" ? localStorage.getItem("access_token") : null;
-    const baseUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api";
+    const baseUrl = process.env.NEXT_PUBLIC_API_URL || "/api";
     const response = await fetch(`${baseUrl}${endpoint}`, {
       headers: token ? { Authorization: `Bearer ${token}` } : {},
     });
@@ -287,5 +288,23 @@ export const LecturerService = {
     link.click();
     link.remove();
     window.URL.revokeObjectURL(url);
+  },
+
+  resetAndCreateTestSession: async (maLopHocPhan: number): Promise<any> => {
+    try {
+      return await apiClient.post<any>(`/class-sessions/class-sections/${maLopHocPhan}/reset-test-session`, {});
+    } catch (error) {
+      console.error("Lỗi tạo phiên test thử nghiệm:", error);
+      throw error;
+    }
+  },
+
+  resetSessionAttendance: async (maBuoiHoc: number): Promise<any> => {
+    try {
+      return await apiClient.post<any>(`/class-sessions/${maBuoiHoc}/reset-attendance`, {});
+    } catch (error) {
+      console.error("Lỗi reset điểm danh phiên test:", error);
+      throw error;
+    }
   }
 };

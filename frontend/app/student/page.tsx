@@ -18,7 +18,7 @@ import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { StudentService } from "@/services/student.service"
 import { StudentProfile } from "@/types/student"
-import { cn } from "@/lib/utils"
+import { cn, formatDateVN } from "@/lib/utils"
 
 export default function StudentDashboard() {
   const router = useRouter()
@@ -175,7 +175,7 @@ export default function StudentDashboard() {
           id: matchSched?.class_session_id || rc.class_section_id,
           maBuoiHoc: matchSched?.class_session_id,
           subject: rc.course_name || `Lớp HP ${rc.class_section_id}`,
-          date: matchSched?.class_date ? new Date(matchSched.class_date).toLocaleDateString("vi-VN") : `Học kỳ ${rc.semester || 1}`,
+          date: matchSched?.class_date ? formatDateVN(matchSched.class_date) : `Học kỳ ${rc.semester || 1}`,
           time: matchSched ? `${matchSched.start_time?.substring(0, 5) || "07:30"} - ${matchSched.end_time?.substring(0, 5) || "11:30"}` : "07:30 - 11:30",
           room: matchSched?.phong_hoc || "Phòng A2-301",
           status: matchSched?.status || "CHUA_DIEM_DANH",
@@ -186,7 +186,7 @@ export default function StudentDashboard() {
         id: item.class_session_id || item.class_section_id || idx,
         maBuoiHoc: item.class_session_id,
         subject: item.course_name || `Lớp HP ${item.class_section_id}`,
-        date: item.class_date ? new Date(item.class_date).toLocaleDateString("vi-VN") : "Hôm nay",
+        date: item.class_date ? formatDateVN(item.class_date) : "Hôm nay",
         time: `${item.start_time?.substring(0, 5) || "07:30"} - ${item.end_time?.substring(0, 5) || "11:30"}`,
         room: item.phong_hoc || "Phòng A2-301",
         status: item.status || "CHUA_DIEM_DANH",
@@ -230,15 +230,20 @@ export default function StudentDashboard() {
   const recentAttendance = [...attendance].reverse().slice(0, 5).map((item, idx) => ({
     id: item.attendance_id || idx,
     subject: item.course_name || `Lớp học phần ${item.class_section_id}`,
-    date: item.class_date ? new Date(item.class_date).toLocaleDateString("vi-VN") : "N/A",
+    date: item.class_date ? formatDateVN(item.class_date) : "N/A",
     status: (item.status === "PRESENT" || item.status === "CO_MAT") ? "present" as const : (item.status === "LATE" || item.status === "DI_MUON") ? "late" as const : "absent" as const
   }))
 
   // Map streak items (last 10 records)
-  const streakDays = attendance.slice(-10).map((item) => ({
-    date: item.class_date ? item.class_date.substring(5, 10).replace("-", "/") : "N/A",
-    status: item.status === "CO_MAT" ? "present" : item.status === "DI_MUON" ? "late" : "absent"
-  }))
+  const streakDays = attendance.slice(-10).map((item) => {
+    const raw = item.class_date ? item.class_date.split("T")[0] : ""
+    const parts = raw.split("-")
+    const dStr = parts.length === 3 ? `${parts[2]}/${parts[1]}` : "N/A"
+    return {
+      date: dStr,
+      status: item.status === "CO_MAT" ? "present" : item.status === "DI_MUON" ? "late" : "absent"
+    }
+  })
 
   // Map warning classes to detailed notification items
   const studentNotifications = warningClasses.map((cls, idx) => ({

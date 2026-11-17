@@ -8,7 +8,8 @@ import { Button } from "@/components/ui/button"
 import { ClassService } from "@/services/class.service"
 import { LecturerService } from "@/services/lecturer.service"
 import { CourseClass } from "@/types/class"
-import { Video, PlayCircle, Clock, CalendarDays, Loader2, BookOpen, AlertCircle } from "lucide-react"
+import { Video, PlayCircle, Clock, CalendarDays, Loader2, BookOpen, AlertCircle, RotateCcw } from "lucide-react"
+import { formatDateVN } from "@/lib/utils"
 
 export default function LecturerLiveOverviewPage() {
   const router = useRouter()
@@ -20,6 +21,7 @@ export default function LecturerLiveOverviewPage() {
   const [classes, setClasses] = useState<CourseClass[]>([])
   const [activeSessions, setActiveSessions] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
+  const [resettingClassId, setResettingClassId] = useState<number | null>(null)
 
   const loadData = async () => {
     setLoading(true)
@@ -51,6 +53,21 @@ export default function LecturerLiveOverviewPage() {
   const ongoingSessions = activeSessions.filter(s => s.status === "DANG_DIEN_RA")
   const readySessions = activeSessions.filter(s => s.status !== "DA_KET_THUC" && s.status !== "DA_HUY" && s.status !== "HOAN_HOC")
 
+  const handleStartTestSession = async (cls: CourseClass) => {
+    if (resettingClassId !== null) return
+    if (!confirm(`Xóa toàn bộ buổi học cũ của lớp "${cls.tenHocPhan}" và tạo 1 phiên test mới ngay bây giờ?`)) return
+    setResettingClassId(cls.id)
+    try {
+      const created = await LecturerService.resetAndCreateTestSession(cls.id)
+      router.push(`/lecturer/live/${created.class_session_id}`)
+    } catch (err) {
+      console.error("Lỗi tạo phiên test thử nghiệm:", err)
+      alert("Không thể tạo phiên test thử nghiệm. Vui lòng thử lại!")
+    } finally {
+      setResettingClassId(null)
+    }
+  }
+
   return (
     <AppShell
       role="lecturer"
@@ -73,6 +90,44 @@ export default function LecturerLiveOverviewPage() {
           </div>
         ) : (
           <div className="space-y-6">
+            {/* Chế độ Test Thử Nghiệm Nhanh với Sinh Viên */}
+            {classes.length > 0 && (
+              <Card className="border-[#F59E0B]/40 bg-[#FFFBEB]/60 shadow-sm">
+                <CardHeader>
+                  <CardTitle className="text-lg font-bold text-[#92400E] flex items-center gap-2">
+                    <RotateCcw className="w-5 h-5 text-[#D97706]" />
+                    Chế độ Test Thử Nghiệm Nhanh với Sinh Viên
+                  </CardTitle>
+                  <CardDescription className="text-xs text-[#B45309]">
+                    Xóa toàn bộ buổi học và lượt điểm danh cũ của lớp học phần, tạo ngay 1 phiên mới đang mở để sinh viên vào kiểm tra nhận diện AI.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  {classes.map((cls) => (
+                    <div key={cls.id} className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3.5 bg-white rounded-xl border border-[#FDE68A]">
+                      <div className="min-w-0">
+                        <h4 className="font-bold text-[#0F172A] text-sm truncate">{cls.tenHocPhan}</h4>
+                        <p className="text-xs text-[#64748B]">Sĩ số: {cls.siSoHienTai} sinh viên</p>
+                      </div>
+                      <Button
+                        size="sm"
+                        disabled={resettingClassId !== null}
+                        onClick={() => handleStartTestSession(cls)}
+                        className="bg-[#D97706] hover:bg-[#B45309] text-white font-semibold shrink-0"
+                      >
+                        {resettingClassId === cls.id ? (
+                          <Loader2 className="w-4 h-4 mr-1.5 animate-spin" />
+                        ) : (
+                          <RotateCcw className="w-4 h-4 mr-1.5" />
+                        )}
+                        Xóa buổi cũ & Mở Phiên Test Mới
+                      </Button>
+                    </div>
+                  ))}
+                </CardContent>
+              </Card>
+            )}
+
             {/* Phiên đang diễn ra */}
             {ongoingSessions.length > 0 && (
               <Card className="border-[#0EA5E9] bg-[#F0F9FF] shadow-md">
@@ -91,7 +146,7 @@ export default function LecturerLiveOverviewPage() {
                       <div>
                         <h4 className="font-bold text-[#0F172A] text-base">{session.course_name || `Lớp HP #${session.class_section_id}`}</h4>
                         <div className="flex flex-wrap gap-3 text-sm text-[#64748B] mt-1">
-                          <span className="flex items-center gap-1"><CalendarDays className="w-4 h-4 text-[#0EA5E9]" /> Buổi số {session.session_number} ({session.class_date})</span>
+                          <span className="flex items-center gap-1"><CalendarDays className="w-4 h-4 text-[#0EA5E9]" /> Buổi số {session.session_number} ({formatDateVN(session.class_date)})</span>
                           <span className="flex items-center gap-1"><Clock className="w-4 h-4 text-[#0EA5E9]" /> {session.start_time || "--:--"} - {session.end_time || "--:--"}</span>
                         </div>
                       </div>
@@ -140,7 +195,7 @@ export default function LecturerLiveOverviewPage() {
                           </div>
                           <h4 className="font-bold text-[#0F172A] mt-2 line-clamp-1">{session.course_name || `Lớp HP #${session.class_section_id}`}</h4>
                           <p className="text-xs text-[#64748B] mt-1 flex items-center gap-1">
-                            <CalendarDays className="w-3.5 h-3.5" /> {session.class_date} ({session.start_time || "--:--"} - {session.end_time || "--:--"})
+                            <CalendarDays className="w-3.5 h-3.5" /> {formatDateVN(session.class_date)} ({session.start_time || "--:--"} - {session.end_time || "--:--"})
                           </p>
                         </div>
                         <Button

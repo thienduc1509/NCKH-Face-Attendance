@@ -102,7 +102,10 @@ def register_account(session: SessionDep, account_in: AccountRegister) -> Any:
             session.commit()
             session.refresh(nganh)
 
+        from app.crud.student_crud import get_next_student_id, sync_student_id_sequence
+
         db_sinhvien = Student(
+            student_id=get_next_student_id(session),
             last_name=account_in.last_name,
             first_name=account_in.first_name,
             google_email=account_in.email,
@@ -114,6 +117,7 @@ def register_account(session: SessionDep, account_in: AccountRegister) -> Any:
         session.add(db_sinhvien)
         session.commit()
         session.refresh(db_sinhvien)
+        sync_student_id_sequence(session)
 
     return db_account
 
@@ -419,15 +423,18 @@ def create_account_with_profile(
         profile = dict(last_name=payload.ho, first_name=payload.ten, google_email=email,
                        phone=payload.dien_thoai, gender=payload.gioi_tinh, account_id=account.account_id)
         if role == "SINH_VIEN":
+            from app.crud.student_crud import get_next_student_id, sync_student_id_sequence
             major = session.exec(select(Major)).first()
             if major is None:
                 major = Major(major_name="Công nghệ thông tin", description="Mặc định")
                 session.add(major)
                 session.flush()
-            session.add(Student(**profile, major_id=major.major_id))
+            session.add(Student(**profile, student_id=get_next_student_id(session), major_id=major.major_id))
         elif role == "GIANG_VIEN":
             session.add(Staff(**profile, position="Giảng viên"))
         session.commit()
+        if role == "SINH_VIEN":
+            sync_student_id_sequence(session)
         session.refresh(account)
         return account
     except IntegrityError as exc:

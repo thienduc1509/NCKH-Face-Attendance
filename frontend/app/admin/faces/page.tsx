@@ -150,12 +150,11 @@ const statusConfig: Record<FaceStatus, { label: string; className: string }> = {
   poor: { label: "Chất lượng kém", className: "bg-[#FFEBEE] text-[#EF4444] border border-[#EF4444]/15" },
 }
 
-const API_ORIGIN = (process.env.NEXT_PUBLIC_API_URL || "http://localhost:5050/api").replace(/\/api\/?$/, "")
-
 const toBackendAssetUrl = (path?: string) => {
   if (!path) return undefined
   if (/^https?:\/\//i.test(path)) return path
-  return `${API_ORIGIN}/${path.replaceAll("\\", "/").replace(/^\/+/, "")}`
+  const cleanPath = path.replaceAll("\\", "/").replace(/^\/+/, "")
+  return `/${cleanPath}`
 }
 
 export default function AdminFaceManagement() {
@@ -628,6 +627,7 @@ export default function AdminFaceManagement() {
                             fill
                             sizes="96px"
                             className="object-cover"
+                            unoptimized
                           />
                         ) : (
                           <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-slate-100 to-slate-200">
@@ -713,7 +713,7 @@ export default function AdminFaceManagement() {
           <>
             {/* Backdrop overlay */}
             <div
-              className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 transition-opacity"
+              className="fixed inset-0 bg-black/20 z-50 transition-opacity"
               onClick={() => setSelectedStudent(null)}
             />
 
@@ -907,6 +907,7 @@ export default function AdminFaceManagement() {
                                   fill
                                   sizes="96px"
                                   className="object-cover"
+                                  unoptimized
                                 />
                               ) : (
                                 <div className="flex flex-col items-center justify-center p-2 text-center">

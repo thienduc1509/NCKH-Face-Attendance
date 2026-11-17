@@ -1,6 +1,12 @@
+import asyncio
+import base64
+import binascii
 import logging
+import time
 import uuid
 
+import cv2
+import numpy as np
 from aiortc import RTCPeerConnection, RTCSessionDescription
 from aiortc.contrib.media import MediaBlackhole
 from fastapi import APIRouter, Depends, HTTPException, Request
@@ -12,6 +18,18 @@ from app.webrtc.webrtc import VideoTransformTrack
 root_logger = logging.getLogger("app")
 
 router = APIRouter(prefix="/webrtc", tags=["webrtc"])
+_http_trackers: dict[int | None, VideoTransformTrack] = {}
+
+
+def _get_http_tracker(class_session_id: int | None) -> VideoTransformTrack:
+    """Return a cached VideoTransformTrack tracker for HTTP frame fallback."""
+    tracker = _http_trackers.get(class_session_id)
+    if tracker is None:
+        if len(_http_trackers) >= 64:
+            _http_trackers.clear()
+        tracker = VideoTransformTrack(track=None, class_session_id=class_session_id)
+        _http_trackers[class_session_id] = tracker
+    return tracker
 
 
 @router.post("/offers")
@@ -167,4 +185,74 @@ async def message(
         raise HTTPException(
             status_code=500,
             detail="Internal server error while sending message",
+        ) from None
+
+
+def _decode_base64_bgr(image_data: str) -> np.ndarray:
+    """Decode a base64 or data-URI image string into an OpenCV BGR array."""
+    encoded = image_data.split(",", 1)[1] if image_data.startswith("data:") and "," in image_data else image_data
+    try:
+        raw_bytes = base64.b64decode(encoded, validate=True)
+    except (binascii.Error, ValueError) as exc:
+        raise HTTPException(status_code=400, detail="Invalid base64 image payload") from exc
+
+    arr = np.frombuffer(raw_bytes, dtype=np.uint8)
+    img_bgr = cv2.imdecode(arr, cv2.IMREAD_COLOR)
+    if img_bgr is None:
+        raise HTTPException(status_code=400, detail="Unable to decode image frame")
+    return img_bgr
+
+
+@router.post("/frame")
+async def process_frame(request: Request):
+    """HTTP fallback endpoint for live face detection and attendance via tunnel/HTTPS."""
+    try:
+        try:
+            params = await request.json()
+        except Exception as exc:
+            raise HTTPException(status_code=400, detail="Invalid JSON payload") from exc
+
+        image_data = params.get("image") if isinstance(params, dict) else None
+        raw_session_id = params.get("class_session_id") if isinstance(params, dict) else None
+
+        if not image_data or not isinstance(image_data, str):
+            raise HTTPException(status_code=422, detail="Missing required field: image")
+
+        class_session_id: int | None = None
+        if raw_session_id is not None:
+            try:
+                class_session_id = int(raw_session_id)
+            except (TypeError, ValueError) as exc:
+                raise HTTPException(status_code=422, detail="Invalid class_session_id") from exc
+
+        img_bgr = _decode_base64_bgr(image_data)
+        tracker = _get_http_tracker(class_session_id)
+
+        faces, newly_stable_ids, id_to_name = await asyncio.to_thread(
+            tracker._detect_and_evaluate_sync, img_bgr
+        )
+
+        if newly_stable_ids and class_session_id:
+            await asyncio.to_thread(tracker._record_attendance_sync, newly_stable_ids)
+
+        payload: dict[str, object] = {
+            "type": "faces_detected",
+            "faces": faces,
+            "timestamp": time.time(),
+        }
+        if newly_stable_ids:
+            first_sid = newly_stable_ids[0]
+            payload["attendance_confirmed"] = {
+                "student_id": str(first_sid),
+                "student_name": id_to_name.get(first_sid, "Sinh viên"),
+            }
+
+        return JSONResponse(payload)
+    except HTTPException:
+        raise
+    except Exception:
+        root_logger.exception("Unexpected error while processing /webrtc/frame")
+        raise HTTPException(
+            status_code=500,
+            detail="Internal server error while processing video frame",
         ) from None

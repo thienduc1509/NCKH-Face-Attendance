@@ -24,7 +24,7 @@ services:
       FIRST_SUPERUSER: admin@example.com
       FIRST_SUPERUSER_PASSWORD: DemoLocal2026!
       SECRET_KEY: attendance-local-demo-session-key-2026
-      FRONTEND_HOST: http://localhost:3000
+      FRONTEND_HOST: https://ptit-hcm-project.id.vn
       IMAGE_STORAGE_PROVIDER: LOCAL
     ports: ["127.0.0.1:8000:8000"]
     volumes:
@@ -41,8 +41,14 @@ services:
     build:
       context: ./frontend
       args:
-        NEXT_PUBLIC_API_URL: http://localhost:8000/api
+        NEXT_PUBLIC_API_URL: /api
+    environment:
+      INTERNAL_BACKEND_URL: http://backend:8000
+      NEXT_PUBLIC_API_URL: /api
     ports: ["127.0.0.1:3000:3000"]
+    depends_on:
+      backend:
+        condition: service_started
 volumes:
   local_pg:
   local_uploads:

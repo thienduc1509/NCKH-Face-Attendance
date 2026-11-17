@@ -113,6 +113,9 @@ export function WebRTCStream({
   const mockCanvasRef = useRef<HTMLCanvasElement | null>(null)
   const mockImageRef = useRef<HTMLImageElement | null>(null)
   const animationFrameIdRef = useRef<number | null>(null)
+  const captureCanvasRef = useRef<HTMLCanvasElement | null>(null)
+  const frameInFlightRef = useRef(false)
+  const httpFallbackActiveRef = useRef(false)
 
   // Escape regex helper
   const escapeRegExp = (string: string) => {
@@ -564,6 +567,8 @@ export function WebRTCStream({
       drawOverlay([])
       setFacesCount(0)
       setStreamActive(false)
+      frameInFlightRef.current = false
+      httpFallbackActiveRef.current = false
       setIceConnectionState("closed")
       setIceGatheringState("complete")
       setSignalingState("closed")
@@ -578,41 +583,10 @@ export function WebRTCStream({
   const startStream = async () => {
     setLoading(true)
     setErrorMsg(null)
+    frameInFlightRef.current = false
+    httpFallbackActiveRef.current = false
     try {
-      const config = {
-        sdpSemantics: "unified-plan",
-      } as RTCConfiguration
-
-      if (useStun) {
-        config.iceServers = [{ urls: ["stun:stun.l.google.com:19302"] }]
-      }
-
-      const pc = new RTCPeerConnection(config)
-      pcRef.current = pc
-
-      // Proactively create DataChannel with label "faces" before createOffer
-      const dc = pc.createDataChannel("faces", { ordered: false })
-      dataChannelRef.current = dc
-      setupDataChannel(dc)
-
-      // Listen on pc.ondatachannel
-      pc.ondatachannel = (event) => {
-        setupDataChannel(event.channel)
-      }
-
-      // Listeners
-      pc.addEventListener("icegatheringstatechange", () => {
-        setIceGatheringState(pc.iceGatheringState)
-      })
-      pc.addEventListener("iceconnectionstatechange", () => {
-        setIceConnectionState(pc.iceConnectionState)
-        if (onConnectionStateChange) onConnectionStateChange(pc.iceConnectionState)
-      })
-      pc.addEventListener("signalingstatechange", () => {
-        setSignalingState(pc.signalingState)
-      })
-
-      // Get Media
+      // Get Media first so camera preview stays active even when WebRTC UDP is unavailable via HTTPS tunnel
       let stream: MediaStream
       if (videoSource === "camera") {
         stream = await navigator.mediaDevices.getUserMedia({
@@ -627,64 +601,114 @@ export function WebRTCStream({
         stream = startMockStream()
       }
       localStreamRef.current = stream
+      setStreamActive(true)
 
       if (localVideoRef.current) {
         localVideoRef.current.srcObject = stream
       }
 
-      stream.getTracks().forEach((track) => {
-        pc.addTrack(track, stream)
-      })
+      try {
+        const config = {
+          sdpSemantics: "unified-plan",
+        } as RTCConfiguration
 
-      // Create Offer
-      const offer = await pc.createOffer()
-      await pc.setLocalDescription(offer)
+        if (useStun) {
+          config.iceServers = [{ urls: ["stun:stun.l.google.com:19302"] }]
+        }
 
-      // Wait for ICE gathering to complete
-      await new Promise<void>((resolve) => {
-        if (pc.iceGatheringState === "complete") {
-          resolve()
-        } else {
-          const checkState = () => {
-            if (pc.iceGatheringState === "complete") {
+        const pc = new RTCPeerConnection(config)
+        pcRef.current = pc
+
+        // Proactively create DataChannel with label "faces" before createOffer
+        const dc = pc.createDataChannel("faces", { ordered: false })
+        dataChannelRef.current = dc
+        setupDataChannel(dc)
+
+        // Listen on pc.ondatachannel
+        pc.ondatachannel = (event) => {
+          setupDataChannel(event.channel)
+        }
+
+        // Listeners
+        pc.addEventListener("icegatheringstatechange", () => {
+          setIceGatheringState(pc.iceGatheringState)
+        })
+        pc.addEventListener("iceconnectionstatechange", () => {
+          if (httpFallbackActiveRef.current && (pc.iceConnectionState === "failed" || pc.iceConnectionState === "disconnected")) {
+            return
+          }
+          setIceConnectionState(pc.iceConnectionState)
+          if (onConnectionStateChange) onConnectionStateChange(pc.iceConnectionState)
+        })
+        pc.addEventListener("signalingstatechange", () => {
+          setSignalingState(pc.signalingState)
+        })
+
+        stream.getTracks().forEach((track) => {
+          pc.addTrack(track, stream)
+        })
+
+        // Create Offer
+        const offer = await pc.createOffer()
+        await pc.setLocalDescription(offer)
+
+        // Wait for ICE gathering to complete (bounded to 3s so HTTPS tunnel never hangs)
+        await new Promise<void>((resolve) => {
+          if (pc.iceGatheringState === "complete") {
+            resolve()
+          } else {
+            let resolved = false
+            const finish = () => {
+              if (resolved) return
+              resolved = true
+              clearTimeout(timer)
               pc.removeEventListener("icegatheringstatechange", checkState)
               resolve()
             }
+            const checkState = () => {
+              if (pc.iceGatheringState === "complete") {
+                finish()
+              }
+            }
+            const timer = setTimeout(finish, 3000)
+            pc.addEventListener("icegatheringstatechange", checkState)
           }
-          pc.addEventListener("icegatheringstatechange", checkState)
+        })
+
+        const localDesc = pc.localDescription
+        if (!localDesc) throw new Error("Không thể khởi tạo mô tả SDP cục bộ")
+
+        let sdp = localDesc.sdp
+        if (selectedCodec !== "default") {
+          sdp = sdpFilterCodec("video", selectedCodec, sdp)
         }
-      })
 
-      const localDesc = pc.localDescription
-      if (!localDesc) throw new Error("Không thể khởi tạo mô tả SDP cục bộ")
+        // Post offer to backend
+        const response = await apiClient.post<any>("/webrtc/offers", {
+          sdp: sdp,
+          type: localDesc.type,
+          class_session_id: maBuoiHoc,
+        })
 
-      let sdp = localDesc.sdp
-      if (selectedCodec !== "default") {
-        sdp = sdpFilterCodec("video", selectedCodec, sdp)
+        if (!response || !response.sdp || !response.type) {
+          throw new Error("Phản hồi SDP không hợp lệ từ máy chủ WebRTC")
+        }
+
+        // Set Remote Description
+        const normalizedSdp = response.sdp.replace(/\r?\n/g, "\r\n").trim() + "\r\n"
+        await pc.setRemoteDescription({
+          type: response.type.toLowerCase(),
+          sdp: normalizedSdp,
+        })
+      } catch (rtcErr) {
+        console.warn("WebRTC UDP không khả dụng qua mạng hiện tại, dùng HTTP frame fallback:", rtcErr)
+        httpFallbackActiveRef.current = true
+        setIceConnectionState("connected")
+        if (onConnectionStateChange) onConnectionStateChange("connected")
       }
-
-      // Post offer to backend
-      const response = await apiClient.post<any>("/webrtc/offers", {
-        sdp: sdp,
-        type: localDesc.type,
-        class_session_id: maBuoiHoc,
-      })
-
-      if (!response || !response.sdp || !response.type) {
-        throw new Error("Phản hồi SDP không hợp lệ từ máy chủ WebRTC")
-      }
-
-      // Set Remote Description
-      const normalizedSdp = response.sdp.replace(/\r?\n/g, "\r\n").trim() + "\r\n"
-      await pc.setRemoteDescription({
-        type: response.type.toLowerCase(),
-        sdp: normalizedSdp,
-      })
-
-      setStreamActive(true)
     } catch (err: any) {
-      console.error("Lỗi khi kết nối WebRTC:", err)
-      setErrorMsg(err.message || "Không thể kết nối luồng camera WebRTC")
+      console.error("Lỗi khi mở camera:", err)
+      setErrorMsg(err.message || "Không thể bật camera điểm danh")
       stopStream()
     } finally {
       setLoading(false)
@@ -699,6 +723,67 @@ export function WebRTCStream({
       video.play().catch(() => setErrorMsg("Không thể phát camera. Vui lòng bật lại camera."))
     }
   }, [streamActive])
+
+  // HTTP fallback frame polling when WebRTC DataChannel is not open (e.g., via Cloudflare Tunnel)
+  useEffect(() => {
+    if (!streamActive) return
+
+    let cancelled = false
+    const intervalId = setInterval(async () => {
+      if (cancelled || frameInFlightRef.current) return
+      if (dataChannelRef.current && dataChannelRef.current.readyState === "open") return
+
+      const video = localVideoRef.current
+      if (!video || video.readyState < 2 || video.videoWidth === 0 || video.videoHeight === 0) {
+        return
+      }
+
+      if (!captureCanvasRef.current) {
+        captureCanvasRef.current = document.createElement("canvas")
+      }
+      const canvas = captureCanvasRef.current
+      if (canvas.width !== 640 || canvas.height !== 480) {
+        canvas.width = 640
+        canvas.height = 480
+      }
+
+      const ctx = canvas.getContext("2d")
+      if (!ctx) return
+
+      ctx.drawImage(video, 0, 0, 640, 480)
+      const imageDataUrl = canvas.toDataURL("image/jpeg", 0.75)
+
+      frameInFlightRef.current = true
+      try {
+        const res = await apiClient.post<DetectionPayload>(
+          "/webrtc/frame",
+          {
+            image: imageDataUrl,
+            class_session_id: maBuoiHoc,
+          },
+          { requiresAuth: false }
+        )
+        if (cancelled) return
+
+        if (!httpFallbackActiveRef.current) {
+          httpFallbackActiveRef.current = true
+          setIceConnectionState("connected")
+          if (onConnectionStateChange) onConnectionStateChange("connected")
+        }
+
+        handleDataMessage({ data: JSON.stringify(res) } as MessageEvent)
+      } catch (err) {
+        console.warn("HTTP frame fallback error:", err)
+      } finally {
+        frameInFlightRef.current = false
+      }
+    }, 350)
+
+    return () => {
+      cancelled = true
+      clearInterval(intervalId)
+    }
+  }, [streamActive, maBuoiHoc, handleDataMessage, onConnectionStateChange])
 
   // Cleanup on unmount
   useEffect(() => {

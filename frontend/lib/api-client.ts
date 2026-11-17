@@ -1,4 +1,4 @@
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api";
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "/api";
 
 interface RequestOptions extends RequestInit {
   requiresAuth?: boolean;
@@ -50,7 +50,7 @@ export const apiClient = {
       response = await fetch(`${API_BASE_URL}${endpoint}`, config);
     } catch (e: any) {
       if (e.message === "Failed to fetch" || e.name === "TypeError") {
-        throw new Error("Không thể kết nối tới máy chủ Backend (http://localhost:8000). Vui lòng kiểm tra máy chủ Backend (fastapi dev) đã được khởi động chưa!");
+        throw new Error("Không thể kết nối tới máy chủ Backend. Vui lòng kiểm tra hệ thống máy chủ đã được khởi động chưa!");
       }
       throw e;
     }
