@@ -17,7 +17,6 @@ import {
 } from "@/components/ui/select"
 import { Loader2, AlertCircle, BarChart3, Download, Users, CheckCircle, BookOpen } from "lucide-react"
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts'
-import { Toaster } from "@/components/ui/sonner"
 import { toast } from "sonner"
 
 export default function LecturerReportsPage() {
@@ -280,7 +279,6 @@ export default function LecturerReportsPage() {
             </div>
         )}
       </div>
-      <Toaster richColors position="top-right" />
     </AppShell>
   )
 }

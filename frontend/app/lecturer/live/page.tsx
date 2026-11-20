@@ -1,5 +1,6 @@
 "use client"
 
+import { toast } from "sonner"
 import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
 import { AppShell } from "@/components/app-shell"
@@ -62,7 +63,7 @@ export default function LecturerLiveOverviewPage() {
       router.push(`/lecturer/live/${created.class_session_id}`)
     } catch (err) {
       console.error("Lỗi tạo phiên test thử nghiệm:", err)
-      alert("Không thể tạo phiên test thử nghiệm. Vui lòng thử lại!")
+      toast.error("Không thể tạo phiên test thử nghiệm. Vui lòng thử lại!")
     } finally {
       setResettingClassId(null)
     }

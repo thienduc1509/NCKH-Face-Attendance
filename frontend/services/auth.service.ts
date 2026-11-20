@@ -28,11 +28,11 @@ export const AuthService = {
     return data;
   },
 
-  sendOtp: async (mssv: number, email: string) => {
+  sendOtp: async (mssv: string, email: string) => {
     return apiClient.post("/users/send-otp", { mssv, email }, { requiresAuth: false });
   },
 
-  register: async (data: { mssv: number; email: string; password: string; otp_code: string }) => {
+  register: async (data: { mssv: string; email: string; password: string; otp_code: string }) => {
     return apiClient.post("/users/registrations", data, { requiresAuth: false });
   },
 

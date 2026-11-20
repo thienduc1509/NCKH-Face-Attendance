@@ -1,5 +1,6 @@
 "use client"
 
+import { toast } from "sonner"
 import { useEffect, useState } from "react"
 import { AppShell } from "@/components/app-shell"
 import { Card, CardContent } from "@/components/ui/card"
@@ -108,7 +109,7 @@ export default function AdminClassesPage() {
       }
       setIsDialogOpen(false)
     } catch (err: any) {
-      alert(err.message || "Khong the luu lop hoc phan.")
+      toast.error(err.message || "Khong the luu lop hoc phan.")
     } finally {
       setSubmitting(false)
     }
@@ -122,7 +123,7 @@ export default function AdminClassesPage() {
       setClasses((prev) => prev.filter((item) => item.id !== editingId))
       setIsDeleteDialogOpen(false)
     } catch {
-      alert("Khong the xoa lop hoc phan.")
+      toast.error("Khong the xoa lop hoc phan.")
     } finally {
       setSubmitting(false)
     }

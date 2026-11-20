@@ -24,7 +24,7 @@ from app.models import (
     StudentRegisterRequest,
     UpdatePassword,
 )
-from app.services.otp_service import verify_otp
+from app.services.otp_service import get_student_for_registration, verify_otp
 
 
 class UserService:
@@ -118,11 +118,14 @@ class UserService:
             )
 
         # 2. Check student record existence
-        student = self.session.get(Student, payload.mssv)
+        normalized_mssv = payload.mssv.strip().upper()
+        student = get_student_for_registration(
+            session=self.session, mssv=normalized_mssv, email=payload.email
+        )
         if not student:
             raise HTTPException(
                 status_code=404,
-                detail=f"Không tìm thấy sinh viên có mã {payload.mssv}",
+                detail=f"Không tìm thấy sinh viên có mã {normalized_mssv} liên kết với email này",
             )
 
         if student.google_email:
@@ -140,7 +143,7 @@ class UserService:
                 detail="Sinh viên này đã đăng ký tài khoản trước đó",
             )
 
-        username = str(payload.mssv)
+        username = normalized_mssv
         existing_account = crud.get_account_by_username(
             session=self.session, username=username
         )

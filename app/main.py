@@ -53,12 +53,44 @@ async def lifespan(app: FastAPI):
                 logger.error(f"Error in periodic cleanup background task: {e}")
             await asyncio.sleep(24 * 3600)
 
+    async def close_expired_class_sessions():
+        from datetime import datetime, timedelta
+        from zoneinfo import ZoneInfo
+
+        from sqlmodel import Session
+
+        from app.core.db import engine
+        from app.services.timetable_service import close_expired_attendance_sessions
+
+        vietnam_tz = ZoneInfo("Asia/Ho_Chi_Minh")
+        while True:
+            try:
+                with Session(engine) as session:
+                    closed_count = close_expired_attendance_sessions(session=session)
+                if closed_count:
+                    logger.info(
+                        "Automatically closed %s expired class sessions.",
+                        closed_count,
+                    )
+            except Exception as e:
+                logger.error("Error closing expired class sessions: %s", e)
+                await asyncio.sleep(60)
+                continue
+
+            now_vn = datetime.now(vietnam_tz)
+            next_midnight = (now_vn + timedelta(days=1)).replace(
+                hour=0, minute=0, second=0, microsecond=0
+            )
+            await asyncio.sleep((next_midnight - now_vn).total_seconds())
+
     cleanup_task = asyncio.create_task(periodic_cleanup())
+    session_expiry_task = asyncio.create_task(close_expired_class_sessions())
 
     yield
 
     # Clean up background task, active WebRTC peer connections, and Redis client
     cleanup_task.cancel()
+    session_expiry_task.cancel()
     try:
         from app.services.webrtc_manager import get_webrtc_manager
 

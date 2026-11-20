@@ -21,12 +21,14 @@ from app.models import (
     FaceImage,
     Major,
     Message,
+    SendOtpRequest,
     Staff,
     Student,
     StudentRegisterRequest,
     UpdatePassword,
 )
 from app.models.base import AppBaseModel
+from app.services.otp_service import generate_and_send_otp
 from app.services.user_service import UserService
 
 router = APIRouter(prefix="/users", tags=["users"])
@@ -378,6 +380,18 @@ class UserWithProfileCreate(AppBaseModel):
         if normalized not in allowed_roles:
             raise ValueError("vai_tro must be student, lecturer, or admin")
         return normalized
+
+
+@router.post(
+    "/send-otp",
+)
+def send_registration_otp(
+    session: SessionDep, payload: SendOtpRequest
+) -> Any:
+    """Send an OTP after validating an unregistered student's MSSV and email."""
+    return generate_and_send_otp(
+        session=session, mssv=payload.mssv, email=payload.email
+    )
 
 
 @router.post(

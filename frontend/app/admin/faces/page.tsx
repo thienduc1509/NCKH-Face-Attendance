@@ -1,5 +1,6 @@
 "use client"
 
+import { toast } from "sonner"
 import { useState, useEffect, useRef } from "react"
 import Image from "next/image"
 import { AppShell } from "@/components/app-shell"
@@ -449,7 +450,7 @@ export default function AdminFaceManagement() {
         text: "Đã phê duyệt hồ sơ khuôn mặt thành công!"
       })
     } catch (err: any) {
-      alert("Lỗi phê duyệt: " + (err.response?.data?.detail || err.message))
+      toast.error("Lỗi phê duyệt: " + (err.response?.data?.detail || err.message))
     }
   }
 
@@ -463,7 +464,7 @@ export default function AdminFaceManagement() {
         text: "Đã từ chối hồ sơ khuôn mặt."
       })
     } catch (err: any) {
-      alert("Lỗi từ chối: " + (err.response?.data?.detail || err.message))
+      toast.error("Lỗi từ chối: " + (err.response?.data?.detail || err.message))
     }
   }
 

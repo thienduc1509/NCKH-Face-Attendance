@@ -1,5 +1,6 @@
 "use client"
 
+import { toast } from "sonner"
 import { useEffect, useState } from "react"
 import { AppShell } from "@/components/app-shell"
 import { Card, CardContent } from "@/components/ui/card"
@@ -47,10 +48,10 @@ export default function LecturerClaimsPage() {
       if (success) {
         setClaims(claims.map(c => c.id === id ? { ...c, status: newStatus } : c))
       } else {
-        alert("Đã xảy ra lỗi khi cập nhật trạng thái.")
+        toast.error("Đã xảy ra lỗi khi cập nhật trạng thái.")
       }
     } catch (err) {
-      alert("Đã xảy ra lỗi khi cập nhật trạng thái.")
+      toast.error("Đã xảy ra lỗi khi cập nhật trạng thái.")
     } finally {
       setProcessingId(null)
     }

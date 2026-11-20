@@ -5,7 +5,7 @@ import random
 from datetime import UTC, datetime, timedelta
 
 from fastapi import HTTPException
-from sqlmodel import Session, col, select
+from sqlmodel import Session, col, func, select
 
 from app.core.config import settings
 from app.models import OTPRecord, Student
@@ -14,14 +14,33 @@ from app.utils import send_email
 logger = logging.getLogger(__name__)
 
 
-def generate_and_send_otp(*, session: Session, mssv: int, email: str) -> dict[str, str]:
+def get_student_for_registration(
+    *, session: Session, mssv: str, email: str
+) -> Student | None:
+    """Resolve legacy numeric IDs by primary key, or alphanumeric IDs by email."""
+    normalized_mssv = mssv.strip().upper()
+    if normalized_mssv.isdecimal():
+        return session.get(Student, int(normalized_mssv))
+
+    return session.exec(
+        select(Student).where(
+            func.lower(Student.google_email) == email.strip().lower()
+        )
+    ).first()
+
+
+def generate_and_send_otp(
+    *, session: Session, mssv: str, email: str
+) -> dict[str, str | None]:
     """Check student eligibility and send OTP verification code."""
-    # 1. Check if student exists with given MSSV
-    student = session.get(Student, mssv)
+    normalized_mssv = mssv.strip().upper()
+    student = get_student_for_registration(
+        session=session, mssv=normalized_mssv, email=email
+    )
     if not student:
         raise HTTPException(
             status_code=404,
-            detail=f"Không tìm thấy mã sinh viên {mssv} trong hệ thống",
+            detail=f"Không tìm thấy mã sinh viên {normalized_mssv} trong hệ thống hoặc chưa liên kết với email này",
         )
 
     # 2. Verify email matches student record (or update if not set)

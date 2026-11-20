@@ -1,5 +1,6 @@
 "use client"
 
+import { toast } from "sonner"
 import { useEffect, useState } from "react"
 import { AppShell } from "@/components/app-shell"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -78,7 +79,7 @@ export default function StudentClaimsPage() {
   const handleSubmitClaim = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!selectedClassId || !reason) {
-      alert("Vui lòng chọn môn học và nhập lý do khiếu nại.")
+      toast.warning("Vui lòng chọn môn học và nhập lý do khiếu nại.")
       return
     }
 
@@ -96,9 +97,9 @@ export default function StudentClaimsPage() {
       setSelectedClassId('')
       setSessionNumber(1)
       setReason('')
-      alert("Gửi khiếu nại thành công!")
+      toast.success("Gửi khiếu nại thành công!")
     } catch (err: any) {
-      alert(err.message || "Đã xảy ra lỗi khi gửi khiếu nại.")
+      toast.error(err.message || "Đã xảy ra lỗi khi gửi khiếu nại.")
     } finally {
       setSubmitting(false)
     }

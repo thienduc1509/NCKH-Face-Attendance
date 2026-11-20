@@ -19,7 +19,6 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import { Toaster } from "@/components/ui/sonner"
 import { toast } from "sonner"
 import {
   Play,
@@ -166,7 +165,7 @@ export default function LecturerLiveClassroom() {
       setStudents(attList)
     } catch (err: any) {
       const msg = err?.response?.data?.detail || err?.message || "Lỗi khi mở phiên điểm danh."
-      alert(`Lỗi: ${typeof msg === "string" ? msg : JSON.stringify(msg)}`)
+      toast.error(`Lỗi: ${typeof msg === "string" ? msg : JSON.stringify(msg)}`)
     }
   }
 
@@ -180,7 +179,7 @@ export default function LecturerLiveClassroom() {
       setStudents(attList)
     } catch (err: any) {
       const msg = err?.response?.data?.detail || err?.message || "Lỗi khi đóng phiên điểm danh."
-      alert(`Lỗi: ${typeof msg === "string" ? msg : JSON.stringify(msg)}`)
+      toast.error(`Lỗi: ${typeof msg === "string" ? msg : JSON.stringify(msg)}`)
     }
   }
 
@@ -196,7 +195,7 @@ export default function LecturerLiveClassroom() {
       setEditingStudent(null)
     } catch (err: any) {
       const msg = err?.response?.data?.detail || err?.message || "Không thể cập nhật điểm danh."
-      alert(`Lỗi: ${typeof msg === "string" ? msg : JSON.stringify(msg)}`)
+      toast.error(`Lỗi: ${typeof msg === "string" ? msg : JSON.stringify(msg)}`)
     }
   }
 
@@ -263,7 +262,6 @@ export default function LecturerLiveClassroom() {
 
   return (
     <div className="min-h-screen bg-[#0D1117] text-white flex">
-      <Toaster richColors position="top-right" />
       {/* Main Grid Area */}
       <div className="flex-1 flex flex-col p-4">
         {/* Header */}

@@ -1,5 +1,6 @@
 "use client"
 
+import { toast } from "sonner"
 import { useEffect, useState } from "react"
 import { AppShell } from "@/components/app-shell"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -142,10 +143,10 @@ export default function LecturerDashboard() {
           claimsCount: Math.max(0, prev.claimsCount - 1)
         }))
       } else {
-        alert("Không thể cập nhật trạng thái khiếu nại.")
+        toast.error("Không thể cập nhật trạng thái khiếu nại.")
       }
     } catch (err) {
-      alert("Đã xảy ra lỗi khi xử lý khiếu nại.")
+      toast.error("Đã xảy ra lỗi khi xử lý khiếu nại.")
     } finally {
       setProcessingClaimId(null)
     }

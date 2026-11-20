@@ -1,5 +1,6 @@
 "use client"
 
+import { toast } from "sonner"
 import { useEffect, useState } from "react"
 import { AppShell } from "@/components/app-shell"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -188,14 +189,14 @@ export default function StudentHistory() {
         sessionNumber: selectedRecord.session,
         currentStatus: selectedRecord.status
       })
-      alert("Đã gửi khiếu nại thành công!")
+      toast.success("Đã gửi khiếu nại thành công!")
       setClaimModalOpen(false)
       setClaimReason("")
       setClaimFile(null)
       setSelectedRecord(null)
       loadData() // Refresh list
     } catch (err: any) {
-      alert(err.message || "Đã xảy ra lỗi khi gửi khiếu nại.")
+      toast.error(err.message || "Đã xảy ra lỗi khi gửi khiếu nại.")
     } finally {
       setSubmittingClaim(false)
     }

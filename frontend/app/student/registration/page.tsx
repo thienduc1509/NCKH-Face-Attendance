@@ -1,5 +1,6 @@
 "use client"
 
+import { toast } from "sonner"
 import { useEffect, useState } from "react"
 import { AppShell } from "@/components/app-shell"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
@@ -52,14 +53,14 @@ export default function StudentRegistrationPage() {
       try {
         const success = await StudentService.registerClass(maLopHocPhan)
         if (success) {
-          alert("Đăng ký lớp học phần thành công!")
+          toast.success("Đăng ký lớp học phần thành công!")
           const updatedClasses = await StudentService.getAvailableClasses()
           setClasses(updatedClasses)
         } else {
-          alert("Đăng ký thất bại. Vui lòng thử lại!")
+          toast.error("Đăng ký thất bại. Vui lòng thử lại!")
         }
       } catch (err: any) {
-        alert(err.message || "Có lỗi xảy ra.")
+        toast.error(err.message || "Có lỗi xảy ra.")
       } finally {
         setProcessingId(null)
       }
@@ -72,14 +73,14 @@ export default function StudentRegistrationPage() {
       try {
         const success = await StudentService.cancelClassRegistration(maLopHocPhan)
         if (success) {
-          alert("Hủy đăng ký lớp học phần thành công!")
+          toast.success("Hủy đăng ký lớp học phần thành công!")
           const updatedClasses = await StudentService.getAvailableClasses()
           setClasses(updatedClasses)
         } else {
-          alert("Hủy đăng ký thất bại. Vui lòng thử lại!")
+          toast.error("Hủy đăng ký thất bại. Vui lòng thử lại!")
         }
       } catch (err: any) {
-        alert(err.message || "Có lỗi xảy ra.")
+        toast.error(err.message || "Có lỗi xảy ra.")
       } finally {
         setProcessingId(null)
       }

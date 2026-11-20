@@ -1,5 +1,6 @@
 "use client"
 
+import { toast } from "sonner"
 import { useState } from "react"
 import { LoginForm, RegisterForm, AuthHero } from "@/components/auth-forms"
 import { useRouter } from "next/navigation"
@@ -20,7 +21,7 @@ export default function LoginPage() {
         try {
           const faces: any = await apiClient.get<any>("/face-images/me");
           if (!faces || !faces.data || faces.data.length === 0 || faces.count === 0) {
-            alert("Bạn chưa có dữ liệu khuôn mặt. Vui lòng cập nhật hình ảnh khuôn mặt!");
+            toast.warning("Bạn chưa có dữ liệu khuôn mặt. Vui lòng cập nhật hình ảnh khuôn mặt!");
             router.push("/student/registration");
             return;
           }
@@ -39,17 +40,17 @@ export default function LoginPage() {
   }
 
   const handleRegister = async (data: {
-    mssv: number
+    mssv: string
     email: string
     password: string
     otp_code: string
   }) => {
     try {
       await AuthService.register(data);
-      alert("Xác thực OTP và Đăng ký tài khoản thành công! Hãy đăng nhập bằng MSSV và Mật khẩu của bạn.");
+      toast.success("Xác thực OTP và Đăng ký tài khoản thành công! Hãy đăng nhập bằng MSSV và Mật khẩu của bạn.");
       setView("login");
     } catch (err: any) {
-      alert("Đăng ký thất bại: " + (err.message || "Lỗi không xác định"));
+      toast.error("Đăng ký thất bại: " + (err.message || "Lỗi không xác định"));
     }
   }
 

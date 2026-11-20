@@ -189,7 +189,7 @@ export function LoginForm({ onSubmit, onRegisterClick, isLocked = false, lockTim
 
 interface RegisterFormProps {
   onSubmit?: (data: {
-    mssv: number
+    mssv: string
     email: string
     password: string
     otp_code: string
@@ -214,7 +214,7 @@ export function RegisterForm({ onSubmit, onLoginClick }: RegisterFormProps) {
   const handleSendOtp = async () => {
     setErrorMessage("");
     setSuccessMessage("");
-    if (!mssv || Number(mssv) <= 0) {
+    if (!mssv.trim()) {
       setErrorMessage("Vui lòng nhập Mã số sinh viên hợp lệ trước khi gửi OTP");
       return;
     }
@@ -225,7 +225,7 @@ export function RegisterForm({ onSubmit, onLoginClick }: RegisterFormProps) {
     setSendingOtp(true);
     try {
       const { AuthService } = await import("@/services/auth.service");
-      const res: any = await AuthService.sendOtp(Number(mssv), email);
+      const res: any = await AuthService.sendOtp(mssv.trim().toUpperCase(), email);
       setSuccessMessage(res.message || "Mã OTP đã được gửi tới email của bạn");
       if (res.dev_otp) {
         setSuccessMessage(`Mã OTP đã gửi! [DEV TEST OTP: ${res.dev_otp}]`);
@@ -253,7 +253,7 @@ export function RegisterForm({ onSubmit, onLoginClick }: RegisterFormProps) {
     setErrorMessage("");
     setSuccessMessage("");
 
-    if (!mssv || Number(mssv) <= 0) {
+    if (!mssv.trim()) {
       setErrorMessage("Vui lòng nhập Mã số sinh viên hợp lệ");
       return;
     }
@@ -277,7 +277,7 @@ export function RegisterForm({ onSubmit, onLoginClick }: RegisterFormProps) {
     setSubmitting(true);
     try {
       await onSubmit?.({
-        mssv: Number(mssv),
+        mssv: mssv.trim().toUpperCase(),
         email,
         password,
         otp_code: otpCode,
@@ -328,8 +328,15 @@ export function RegisterForm({ onSubmit, onLoginClick }: RegisterFormProps) {
         <div className="relative">
           <User className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
           <Input
-            type="number"
-            placeholder="Mã số sinh viên (MSSV)"
+            id="mssv"
+            name="mssv"
+            type="text"
+            autoComplete="username"
+            autoCorrect="off"
+            autoCapitalize="none"
+            spellCheck={false}
+            maxLength={50}
+            placeholder="Mã số sinh viên (VD: N23DCCN011)"
             value={mssv}
             onChange={(e) => { setMssv(e.target.value); setErrorMessage(""); }}
             className="pl-10 h-11 bg-background border-border focus:border-[#0EA5E9] focus:ring-[#0EA5E9] text-foreground"
@@ -373,6 +380,7 @@ export function RegisterForm({ onSubmit, onLoginClick }: RegisterFormProps) {
           <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
           <Input
             type={showPassword ? "text" : "password"}
+            autoComplete="new-password"
             placeholder="Mật khẩu (tối thiểu 5 ký tự)"
             value={password}
             onChange={(e) => { setPassword(e.target.value); setErrorMessage(""); }}

@@ -1,5 +1,6 @@
 "use client"
 
+import { toast } from "sonner"
 import { useEffect, useState } from "react"
 import { AppShell } from "@/components/app-shell"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
@@ -41,9 +42,9 @@ export default function StudentProfilePage() {
     try {
       await StudentService.updateProfile(editForm)
       setProfile({ ...profile, ...editForm })
-      alert("Cập nhật thông tin thành công!")
+      toast.success("Cập nhật thông tin thành công!")
     } catch (err) {
-      alert("Có lỗi xảy ra khi lưu thông tin.")
+      toast.error("Có lỗi xảy ra khi lưu thông tin.")
     } finally {
       setSaving(false)
     }

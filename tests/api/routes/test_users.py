@@ -2,7 +2,7 @@ from datetime import UTC
 from unittest.mock import patch
 
 from fastapi.testclient import TestClient
-from sqlmodel import Session, select
+from sqlmodel import Session, func, select
 
 from app import crud
 from app.core.config import settings
@@ -334,6 +334,54 @@ def test_register_user(client: TestClient, db: Session) -> None:
     assert user_db.username == "20210001"
     verified, _ = verify_password(password, user_db.password_hash)
     assert verified
+
+
+def test_register_user_with_alphanumeric_mssv(
+    client: TestClient, db: Session
+) -> None:
+    email = random_email()
+    password = random_lower_string()
+
+    from app.models import Major, Student
+
+    major = Major(major_name="Test Major")
+    db.add(major)
+    db.commit()
+    db.refresh(major)
+
+    last_student_id = db.exec(select(func.max(Student.student_id))).one() or 0
+    student = Student(
+        student_id=max(last_student_id, 20210002) + 1,
+        last_name="Tran",
+        first_name="Binh",
+        google_email=email,
+        major_id=major.major_id,
+    )
+    db.add(student)
+    db.commit()
+
+    with patch("app.services.otp_service.settings.emails_enabled", False):
+        otp_response = client.post(
+            f"{settings.API_V1_STR}/users/send-otp",
+            json={"mssv": "N23DCCN011", "email": email},
+        )
+    assert otp_response.status_code == 200
+    otp_code = otp_response.json()["dev_otp"]
+
+    registration_response = client.post(
+        f"{settings.API_V1_STR}/users/registrations",
+        json={
+            "mssv": "N23DCCN011",
+            "email": email,
+            "password": password,
+            "otp_code": otp_code,
+        },
+    )
+    assert registration_response.status_code == 201
+    assert registration_response.json()["username"] == "N23DCCN011"
+
+    db.refresh(student)
+    assert student.account_id is not None
 
 
 def test_register_user_already_exists_error(client: TestClient, db: Session) -> None:

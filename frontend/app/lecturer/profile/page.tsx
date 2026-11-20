@@ -1,5 +1,6 @@
 "use client"
 
+import { toast } from "sonner"
 import { useEffect, useState } from "react"
 import { AppShell } from "@/components/app-shell"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
@@ -63,10 +64,10 @@ export default function LecturerProfilePage() {
 
       await apiClient.patch("/users/me", payload)
       setProfile({ ...profile, ...editForm })
-      alert("Cập nhật thông tin hồ sơ thành công!")
+      toast.success("Cập nhật thông tin hồ sơ thành công!")
     } catch (err: any) {
       console.error("Lỗi cập nhật hồ sơ:", err)
-      alert("Có lỗi xảy ra khi lưu thông tin.")
+      toast.error("Có lỗi xảy ra khi lưu thông tin.")
     } finally {
       setSaving(false)
     }
@@ -74,11 +75,11 @@ export default function LecturerProfilePage() {
 
   const handleChangePassword = async () => {
     if (!passwordForm.oldPassword || !passwordForm.newPassword) {
-      alert("Vui lòng nhập đầy đủ mật khẩu cũ và mật khẩu mới.")
+      toast.warning("Vui lòng nhập đầy đủ mật khẩu cũ và mật khẩu mới.")
       return
     }
     if (passwordForm.newPassword !== passwordForm.confirmPassword) {
-      alert("Mật khẩu mới và xác nhận mật khẩu không khớp.")
+      toast.warning("Mật khẩu mới và xác nhận mật khẩu không khớp.")
       return
     }
     setChangingPassword(true)
@@ -87,10 +88,10 @@ export default function LecturerProfilePage() {
         current_password: passwordForm.oldPassword,
         new_password: passwordForm.newPassword
       })
-      alert("Đổi mật khẩu thành công!")
+      toast.success("Đổi mật khẩu thành công!")
       setPasswordForm({ oldPassword: '', newPassword: '', confirmPassword: '' })
     } catch (err: any) {
-      alert(err?.response?.data?.detail || "Mật khẩu cũ không chính xác hoặc lỗi hệ thống.")
+      toast.error(err?.response?.data?.detail || "Mật khẩu cũ không chính xác hoặc lỗi hệ thống.")
     } finally {
       setChangingPassword(false)
     }

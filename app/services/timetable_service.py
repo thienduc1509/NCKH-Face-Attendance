@@ -1,6 +1,6 @@
 """Provide timetable application services."""
 
-from datetime import datetime
+from datetime import date, datetime
 from typing import Any
 from zoneinfo import ZoneInfo
 
@@ -342,6 +342,36 @@ def close_attendance(
     except Exception as e:
         print("Warning finalizing absent attendance:", e)
     return item
+
+
+def close_expired_attendance_sessions(
+    *, session: Session, as_of_date: date | None = None
+) -> int:
+    """Close active class sessions whose Vietnam-local class date has passed."""
+    from sqlmodel import select
+
+    from app.crud import attendance_crud
+    from app.models import ClassSession
+
+    today = as_of_date or datetime.now(ZoneInfo("Asia/Ho_Chi_Minh")).date()
+    expired_sessions = session.exec(
+        select(ClassSession)
+        .where(ClassSession.status == "DANG_DIEN_RA")
+        .where(ClassSession.class_date < today)
+        .order_by(ClassSession.class_date)
+    ).all()
+
+    closed_count = 0
+    for class_session in expired_sessions:
+        attendance_crud.finalize_absent_attendance(
+            session=session, class_session=class_session
+        )
+        class_session.status = "DA_KET_THUC"
+        session.add(class_session)
+        session.commit()
+        closed_count += 1
+
+    return closed_count
 
 
 def cancel_lesson_by_lecturer(

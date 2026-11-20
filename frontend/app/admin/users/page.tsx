@@ -1,5 +1,6 @@
 "use client"
 
+import { toast } from "sonner"
 import { useEffect, useState } from "react"
 import { AppShell } from "@/components/app-shell"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -125,7 +126,7 @@ export default function AdminUserManagement() {
         } : u))
       }
     } catch (err) {
-      alert("Không thể cập nhật trạng thái tài khoản.")
+      toast.error("Không thể cập nhật trạng thái tài khoản.")
     }
   }
 
@@ -137,13 +138,13 @@ export default function AdminUserManagement() {
         setUsers(prev => prev.filter(u => u.id !== accountId.toString()))
       }
     } catch (err) {
-      alert("Lỗi khi xóa người dùng.")
+      toast.error("Lỗi khi xóa người dùng.")
     }
   }
 
   const handleCreateUser = async () => {
     if (!formName.trim() || !formUsername.trim() || !formPassword.trim()) {
-      alert("Vui lòng điền đầy đủ các thông tin bắt buộc (Họ tên, Tên đăng nhập và Mật khẩu).")
+      toast.warning("Vui lòng điền đầy đủ các thông tin bắt buộc (Họ tên, Tên đăng nhập và Mật khẩu).")
       return
     }
     setSubmitting(true)
@@ -165,8 +166,8 @@ export default function AdminUserManagement() {
 
       const res = await AdminService.createUser(payload)
       if (res) {
-        alert("Tạo người dùng thành công!")
         setCreateUserOpen(false)
+        toast.success("Tạo người dùng thành công!")
         // Reset form
         setFormName("")
         setFormUsername("")
@@ -178,7 +179,7 @@ export default function AdminUserManagement() {
         fetchUsers()
       }
     } catch (err: any) {
-      alert(err.message || "Lỗi khi tạo tài khoản người dùng.")
+      toast.error(err.message || "Lỗi khi tạo tài khoản người dùng.")
     } finally {
       setSubmitting(false)
     }

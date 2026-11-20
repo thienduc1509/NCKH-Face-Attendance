@@ -1,5 +1,6 @@
 "use client"
 
+import { toast } from "sonner"
 import { useEffect, useState } from "react"
 import { AppShell } from "@/components/app-shell"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -203,7 +204,7 @@ export default function StudentDashboard() {
 
   const handleOpenSchedule = (item: typeof upcomingClasses[number]) => {
     if (!item.maBuoiHoc) {
-      alert("Buổi học này chưa có mã phiên điểm danh.")
+      toast.warning("Buổi học này chưa có mã phiên điểm danh.")
       return
     }
 
@@ -213,17 +214,17 @@ export default function StudentDashboard() {
     }
 
     if (item.status === "DA_KET_THUC" || item.status === "COMPLETED") {
-      alert("Buổi học này đã kết thúc. Bạn có thể xem kết quả trong lịch sử điểm danh.")
+      toast.info("Buổi học này đã kết thúc. Bạn có thể xem kết quả trong lịch sử điểm danh.")
       router.push("/student/history")
       return
     }
 
     if (item.status === "DA_HUY" || item.status === "CANCELLED") {
-      alert("Buổi học này đã bị hủy.")
+      toast.warning("Buổi học này đã bị hủy.")
       return
     }
 
-    alert("Giảng viên chưa mở phiên điểm danh cho buổi học này.")
+    toast.info("Giảng viên chưa mở phiên điểm danh cho buổi học này.")
   }
 
   // Map attendance items (most recent first)

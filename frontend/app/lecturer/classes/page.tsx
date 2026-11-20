@@ -1,5 +1,6 @@
 "use client"
 
+import { toast } from "sonner"
 import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
 import { AppShell } from "@/components/app-shell"
@@ -153,7 +154,7 @@ export default function LecturerClassesPage() {
       const studentData = await LecturerService.getClassStudents(cls.id)
       setStudents(studentData)
     } catch (err: any) {
-      alert("Không thể tải danh sách sinh viên.")
+      toast.error("Không thể tải danh sách sinh viên.")
     } finally {
       setStudentsLoading(false)
     }
@@ -186,7 +187,7 @@ export default function LecturerClassesPage() {
     } catch (err: any) {
       console.error("Lỗi lưu buổi học:", err)
       const msg = err?.response?.data?.detail || err?.message || "Không thể lưu buổi học."
-      alert(`Lỗi: ${typeof msg === "string" ? msg : JSON.stringify(msg)}`)
+      toast.error(`Lỗi: ${typeof msg === "string" ? msg : JSON.stringify(msg)}`)
     }
   }
 
@@ -211,7 +212,7 @@ export default function LecturerClassesPage() {
       await LecturerService.cancelSession(maBuoiHoc)
       await loadClassDetails(selectedClass)
     } catch {
-      alert("Khong the huy buoi hoc.")
+      toast.error("Khong the huy buoi hoc.")
     }
   }
 
@@ -251,7 +252,7 @@ export default function LecturerClassesPage() {
       setPostponedSessionForMakeup(currentPostponed)
       setIsMakeupPromptModalOpen(true)
     } catch {
-      alert("Không thể hoãn buổi học. Vui lòng thử lại!")
+      toast.error("Không thể hoãn buổi học. Vui lòng thử lại!")
     } finally {
       setPostponeSubmitting(false)
     }
@@ -262,7 +263,7 @@ export default function LecturerClassesPage() {
       await LecturerService.moDiemDanh(maBuoiHoc)
       router.push(`/lecturer/live/${maBuoiHoc}`)
     } catch {
-      alert("Khong the mo phien diem danh.")
+      toast.error("Khong the mo phien diem danh.")
     }
   }
 
@@ -274,7 +275,7 @@ export default function LecturerClassesPage() {
       const created = await LecturerService.resetAndCreateTestSession(selectedClass.id)
       router.push(`/lecturer/live/${created.class_session_id}`)
     } catch {
-      alert("Không thể tạo phiên test thử nghiệm.")
+      toast.error("Không thể tạo phiên test thử nghiệm.")
     } finally {
       setTestSessionCreating(false)
     }
