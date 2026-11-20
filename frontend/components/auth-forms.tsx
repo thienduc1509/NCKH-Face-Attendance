@@ -26,12 +26,11 @@ type UserRole = "student" | "lecturer" | "admin"
 
 interface LoginFormProps {
   onSubmit?: (data: { email: string; password: string; role: UserRole; remember: boolean }) => Promise<void> | void
-  onRegisterClick?: () => void
   isLocked?: boolean
   lockTimeRemaining?: number
 }
 
-export function LoginForm({ onSubmit, onRegisterClick, isLocked = false, lockTimeRemaining = 0 }: LoginFormProps) {
+export function LoginForm({ onSubmit, isLocked = false, lockTimeRemaining = 0 }: LoginFormProps) {
   const [role, setRole] = useState<UserRole>("student")
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
@@ -176,13 +175,6 @@ export function LoginForm({ onSubmit, onRegisterClick, isLocked = false, lockTim
 
 
 
-      {/* Register Link */}
-      <p className="text-center text-sm text-muted-foreground mt-6">
-        Chưa có tài khoản?{" "}
-        <button type="button" onClick={onRegisterClick} className="text-[#0EA5E9] hover:underline font-medium">
-          Đăng ký ngay
-        </button>
-      </p>
     </div>
   )
 }
