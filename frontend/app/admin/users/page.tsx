@@ -135,7 +135,7 @@ export default function AdminUserManagement() {
     try {
       const success = await AdminService.deleteUser(accountId)
       if (success) {
-        setUsers(prev => prev.filter(u => u.id !== accountId.toString()))
+        await fetchUsers()
       }
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Không thể xóa tài khoản.")
