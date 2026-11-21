@@ -131,14 +131,14 @@ export default function AdminUserManagement() {
   }
 
   const handleDeleteUser = async (accountId: number) => {
-    if (!confirm("Bạn có chắc chắn muốn xóa tài khoản này và hồ sơ liên quan? Hành động này không thể hoàn tác.")) return
+    if (!confirm("Bạn có chắc chắn muốn xóa tài khoản đăng nhập này? Hồ sơ và lịch sử điểm danh/khiếu nại sẽ được giữ lại; tài khoản đăng nhập không thể khôi phục.")) return
     try {
       const success = await AdminService.deleteUser(accountId)
       if (success) {
         setUsers(prev => prev.filter(u => u.id !== accountId.toString()))
       }
     } catch (err) {
-      toast.error("Lỗi khi xóa người dùng.")
+      toast.error(err instanceof Error ? err.message : "Không thể xóa tài khoản.")
     }
   }
 

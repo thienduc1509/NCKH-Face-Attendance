@@ -4,9 +4,12 @@ User service.
 Contains database operations and business logic for user profiles and accounts.
 """
 
+import logging
 from typing import Any
 
 from fastapi import Depends, HTTPException
+from sqlalchemy import delete, update
+from sqlalchemy.exc import IntegrityError
 from sqlmodel import Session, col, func, select
 
 from app import crud
@@ -17,14 +20,19 @@ from app.models import (
     AccountCreate,
     AccountRegister,
     AccountUpdate,
+    AuditLog,
     FaceImage,
     Major,
+    OAuthIdentity,
+    RefreshToken,
     Staff,
     Student,
     StudentRegisterRequest,
     UpdatePassword,
 )
 from app.services.otp_service import get_student_for_registration, verify_otp
+
+logger = logging.getLogger(__name__)
 
 
 class UserService:
@@ -336,7 +344,7 @@ class UserService:
         )
 
     def delete_account(self, current_account: Account, account_id: int) -> None:
-        """Xóa tài khoản."""
+        """Xóa thông tin đăng nhập và giữ lại hồ sơ cùng lịch sử liên quan."""
         account = self.session.get(Account, account_id)
         if not account:
             raise HTTPException(status_code=404, detail="Account not found")
@@ -344,8 +352,46 @@ class UserService:
             raise HTTPException(
                 status_code=403, detail="Admin accounts cannot delete themselves"
             )
-        self.session.delete(account)
-        self.session.commit()
+
+        try:
+            self.session.execute(
+                update(Student)
+                .where(Student.account_id == account_id)
+                .values(account_id=None)
+            )
+            self.session.execute(
+                update(Staff)
+                .where(Staff.account_id == account_id)
+                .values(account_id=None)
+            )
+            self.session.execute(
+                update(FaceImage)
+                .where(FaceImage.reviewer_id == account_id)
+                .values(reviewer_id=None)
+            )
+            self.session.execute(
+                update(AuditLog)
+                .where(AuditLog.ma_tai_khoan == account_id)
+                .values(ma_tai_khoan=None)
+            )
+            self.session.execute(
+                delete(RefreshToken).where(RefreshToken.account_id == account_id)
+            )
+            self.session.execute(
+                delete(OAuthIdentity).where(OAuthIdentity.account_id == account_id)
+            )
+            self.session.delete(account)
+            self.session.commit()
+        except IntegrityError as exc:
+            self.session.rollback()
+            logger.exception(
+                "Could not delete account %s because related records remain",
+                account_id,
+            )
+            raise HTTPException(
+                status_code=409,
+                detail="Không thể xóa tài khoản vì vẫn còn dữ liệu liên quan chưa thể xử lý an toàn.",
+            ) from exc
 
     def delete_user_me(self, current_account: Account) -> None:
         """Xóa tài khoản cá nhân."""

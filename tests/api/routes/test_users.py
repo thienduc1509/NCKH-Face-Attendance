@@ -1,4 +1,4 @@
-from datetime import UTC
+from datetime import UTC, datetime
 from unittest.mock import patch
 
 from fastapi.testclient import TestClient
@@ -7,7 +7,17 @@ from sqlmodel import Session, func, select
 from app import crud
 from app.core.config import settings
 from app.core.security import verify_password
-from app.models import Account, AccountCreate
+from app.models import (
+    Account,
+    AccountCreate,
+    AuditLog,
+    FaceImage,
+    Major,
+    OAuthIdentity,
+    RefreshToken,
+    Staff,
+    Student,
+)
 from tests.utils.user import create_random_user
 from tests.utils.utils import random_email, random_lower_string
 
@@ -551,6 +561,138 @@ def test_delete_user_super_user(
     assert deleted_user["message"] == "Account deleted successfully"
     result = db.exec(select(Account).where(Account.account_id == user_id)).first()
     assert result is None
+
+
+def test_delete_user_preserves_profiles_and_cleans_account_references(
+    client: TestClient, superuser_token_headers: dict[str, str], db: Session
+) -> None:
+    student_account = crud.create_user(
+        session=db,
+        user_create=AccountCreate(
+            username=random_email(),
+            password=random_lower_string(),
+            role="SINH_VIEN",
+        ),
+    )
+    lecturer_account = crud.create_user(
+        session=db,
+        user_create=AccountCreate(
+            username=random_email(),
+            password=random_lower_string(),
+            role="GIANG_VIEN",
+        ),
+    )
+
+    major = Major(major_name="Test major")
+    db.add(major)
+    db.commit()
+    db.refresh(major)
+
+    student = Student(
+        last_name="Test",
+        first_name="Student",
+        major_id=major.major_id,
+        account_id=student_account.account_id,
+    )
+    staff = Staff(
+        last_name="Test",
+        first_name="Lecturer",
+        account_id=lecturer_account.account_id,
+    )
+    db.add_all([student, staff])
+    db.commit()
+    db.refresh(student)
+    db.refresh(staff)
+
+    face_image = FaceImage(
+        student_id=student.student_id,
+        reviewer_id=lecturer_account.account_id,
+        image_path="test-face.jpg",
+    )
+    student_audit_log = AuditLog(
+        ma_tai_khoan=student_account.account_id,
+        hanh_dong="test student account action",
+    )
+    lecturer_audit_log = AuditLog(
+        ma_tai_khoan=lecturer_account.account_id,
+        hanh_dong="test lecturer account action",
+    )
+    linked_records = [
+        face_image,
+        RefreshToken(
+            account_id=student_account.account_id,
+            token_hash=random_lower_string(),
+            expires_at=datetime.now(UTC),
+        ),
+        RefreshToken(
+            account_id=lecturer_account.account_id,
+            token_hash=random_lower_string(),
+            expires_at=datetime.now(UTC),
+        ),
+        OAuthIdentity(
+            provider="google",
+            provider_subject=random_lower_string(),
+            email=random_email(),
+            account_id=student_account.account_id,
+        ),
+        OAuthIdentity(
+            provider="google",
+            provider_subject=random_lower_string(),
+            email=random_email(),
+            account_id=lecturer_account.account_id,
+        ),
+        student_audit_log,
+        lecturer_audit_log,
+    ]
+    db.add_all(linked_records)
+    db.commit()
+    db.refresh(face_image)
+    db.refresh(student_audit_log)
+    db.refresh(lecturer_audit_log)
+    student_account_id = student_account.account_id
+    lecturer_account_id = lecturer_account.account_id
+    student_id = student.student_id
+    staff_id = staff.staff_id
+    image_id = face_image.image_id
+    audit_log_ids = (
+        student_audit_log.ma_audit_log,
+        lecturer_audit_log.ma_audit_log,
+    )
+
+    for account_id in (student_account_id, lecturer_account_id):
+        response = client.delete(
+            f"{settings.API_V1_STR}/users/{account_id}",
+            headers=superuser_token_headers,
+        )
+        assert response.status_code == 200
+
+    db.expire_all()
+    assert db.get(Account, student_account_id) is None
+    assert db.get(Account, lecturer_account_id) is None
+    assert db.get(Student, student_id).account_id is None
+    assert db.get(Staff, staff_id).account_id is None
+
+    retained_image = db.get(FaceImage, image_id)
+    assert retained_image is not None
+    assert retained_image.student_id == student_id
+    assert retained_image.reviewer_id is None
+    account_ids = (student_account_id, lecturer_account_id)
+    assert (
+        db.exec(
+            select(RefreshToken).where(RefreshToken.account_id.in_(account_ids))
+        ).all()
+        == []
+    )
+    assert (
+        db.exec(select(OAuthIdentity).where(OAuthIdentity.account_id.in_(account_ids)))
+        .all()
+        == []
+    )
+    retained_audit_logs = db.exec(
+        select(AuditLog).where(AuditLog.ma_audit_log.in_(audit_log_ids))
+    ).all()
+    assert len(retained_audit_logs) == 2
+    assert all(log.ma_tai_khoan is None for log in retained_audit_logs)
 
 
 def test_delete_user_current_super_user_error(

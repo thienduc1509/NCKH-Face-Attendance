@@ -347,15 +347,7 @@ def update_account(
 def delete_account(
     session: SessionDep, current_account: CurrentAccount, account_id: int
 ) -> Message:
-    account = session.get(Account, account_id)
-    if not account:
-        raise HTTPException(status_code=404, detail="Account not found")
-    if account == current_account:
-        raise HTTPException(
-            status_code=403, detail="Admin accounts cannot delete themselves"
-        )
-    session.delete(account)
-    session.commit()
+    UserService(session).delete_account(current_account, account_id)
     return Message(message="Account deleted successfully")
 
 
