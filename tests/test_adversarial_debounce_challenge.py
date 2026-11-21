@@ -407,6 +407,68 @@ class TestAdversarialStrangerHandling:
             assert is_match == exp, f"Score {s} expected match={exp}, got {is_match}"
 
 
+class TestNotInClassEnrollmentFilter:
+    """Recognized student who did not register the open class section.
+
+    Must not reach the 3-frame stability counter, must not write attendance,
+    and must be reported as NOT_IN_CLASS instead of STABILIZING.
+    """
+
+    def _build_track(self, enrolled: set[int]):
+        with patch.object(VideoTransformTrack, "_init_registered_students"), \
+             patch.object(VideoTransformTrack, "_init_enrolled_students"):
+            track = VideoTransformTrack(track=MagicMock(), class_session_id=42)
+        track.enrolled_student_ids = enrolled
+        return track
+
+    def _face(self, student_id: str) -> dict:
+        return {
+            "bbox": [100, 100, 80, 80],
+            "bbox_normalized": [0.2, 0.2, 0.15, 0.15],
+            "student_id": student_id,
+            "student_name": f"SV {student_id}",
+            "score": 0.88,
+            "detection_score": 0.95,
+            "recognized": True,
+        }
+
+    def test_outsider_never_stabilizes_or_writes(self):
+        track = self._build_track(enrolled={101})
+        db_write_log = []
+        track._record_attendance_sync = lambda ids: db_write_log.append(ids)
+        dummy_frame = np.zeros((480, 640, 3), dtype=np.uint8)
+
+        with patch(
+            "app.webrtc.webrtc.face_service.detect_and_recognize_faces",
+            return_value=[self._face("999")],
+        ):
+            for _ in range(10):
+                faces, newly_stable, _ = track._detect_and_evaluate_sync(dummy_frame)
+                assert newly_stable == []
+                assert faces[0]["attendance_status"] == "NOT_IN_CLASS"
+                assert faces[0]["in_class"] is False
+
+        assert db_write_log == []
+        assert 999 not in track.registered_students
+        assert track.stability.counts.get(999, 0) == 0
+
+    def test_enrolled_student_keeps_normal_flow(self):
+        track = self._build_track(enrolled={101})
+        dummy_frame = np.zeros((480, 640, 3), dtype=np.uint8)
+
+        with patch(
+            "app.webrtc.webrtc.face_service.detect_and_recognize_faces",
+            return_value=[self._face("101")],
+        ):
+            statuses = []
+            for _ in range(3):
+                faces, _, _ = track._detect_and_evaluate_sync(dummy_frame)
+                statuses.append(faces[0]["attendance_status"])
+
+        assert statuses == ["STABILIZING", "STABILIZING", "NEWLY_MARKED"]
+        assert "in_class" not in faces[0]
+
+
 # ===========================================================================
 # 5. FRONTEND BOUNDING BOX & MIRRORING CONTRACT
 # ===========================================================================

@@ -118,6 +118,38 @@ describe("WebRTC Canvas Bounding Box & Coordinate Transformation", () => {
       expect(res.color).toBe("#EF4444")
       expect(res.label).toBe("Unknown")
     })
+
+    it("should assign orange #F59E0B and 'Không thuộc lớp' for recognized outsider", () => {
+      const face: DetectionFace = {
+        bbox: [100, 100, 150, 150],
+        bbox_normalized: [0.15, 0.2, 0.23, 0.31],
+        student_id: "999",
+        student_name: "Nguyen Van Ngoai",
+        score: 0.91,
+        recognized: true,
+        attendance_status: "NOT_IN_CLASS",
+        in_class: false,
+      }
+
+      const res = computeBoundingBox(face, canvasWidth, canvasHeight, false)
+      expect(res.color).toBe("#F59E0B")
+      expect(res.label).toBe("Không thuộc lớp")
+    })
+
+    it("should treat in_class=false as outsider even without attendance_status", () => {
+      const face: DetectionFace = {
+        bbox: [100, 100, 150, 150],
+        student_id: "999",
+        student_name: "Nguyen Van Ngoai",
+        score: 0.91,
+        recognized: true,
+        in_class: false,
+      }
+
+      const res = computeBoundingBox(face, canvasWidth, canvasHeight, false)
+      expect(res.color).toBe("#F59E0B")
+      expect(res.label).toBe("Không thuộc lớp")
+    })
   })
 
   describe("4. WebRTC DataChannel Payload Parsing & Debounce Contracts", () => {

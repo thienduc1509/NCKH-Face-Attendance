@@ -9,6 +9,8 @@ from sqlmodel import Session, select
 from app.core.db import engine
 from app.crud.attendance_crud import mark_attendance_by_lora
 from app.models.attendance import Attendance
+from app.models.class_session import ClassSession
+from app.models.course_registration import CourseRegistration
 from app.services.face_service import face_service
 from app.services.recognition_stability import RecognitionStability
 from app.utils.logger import logger
@@ -39,7 +41,10 @@ class VideoTransformTrack(MediaStreamTrack):
         self.processing = False
         self.stability = RecognitionStability(required_frames=3)
         self.registered_students: set[int] = set()
+        # None = chưa nạp được (không lọc); set rỗng = lớp chưa có ai đăng ký
+        self.enrolled_student_ids: set[int] | None = None
         self._init_registered_students()
+        self._init_enrolled_students()
 
     def set_data_channel(self, channel: Any) -> None:
         """Attach or update active WebRTC DataChannel."""
@@ -74,6 +79,42 @@ class VideoTransformTrack(MediaStreamTrack):
                 e,
             )
 
+    def _init_enrolled_students(self) -> None:
+        """Preload valid registrations of the class section owning this session."""
+        if not self.class_session_id:
+            return
+        try:
+            with Session(engine) as session:
+                class_session = session.get(ClassSession, self.class_session_id)
+                if not class_session:
+                    return
+                records = session.exec(
+                    select(CourseRegistration.student_id).where(
+                        CourseRegistration.class_section_id
+                        == class_session.class_section_id,
+                        CourseRegistration.status.is_(True),
+                    )
+                ).all()
+                self.enrolled_student_ids = set(records)
+                logger.info(
+                    "VideoTransformTrack: Session %s has %d enrolled students",
+                    self.class_session_id,
+                    len(self.enrolled_student_ids),
+                )
+        except Exception as e:
+            logger.warning(
+                "Could not preload class registrations for session %s: %s",
+                self.class_session_id,
+                e,
+            )
+
+    def _is_enrolled(self, student_id: int) -> bool:
+        """Return True when the student belongs to the class (unknown roster = allow)."""
+        return (
+            self.enrolled_student_ids is None
+            or student_id in self.enrolled_student_ids
+        )
+
     def _detect_and_evaluate_sync(
         self, img_bgr
     ) -> tuple[list[dict[str, Any]], list[int], dict[int, str]]:
@@ -87,6 +128,9 @@ class VideoTransformTrack(MediaStreamTrack):
             if f.get("recognized") and sid is not None:
                 try:
                     int_sid = int(sid)
+                    # Sinh viên ngoài danh sách lớp không vào bộ đếm ổn định
+                    if not self._is_enrolled(int_sid):
+                        continue
                     recognized_int_ids.append(int_sid)
                     if f.get("student_name"):
                         id_to_name[int_sid] = f["student_name"]
@@ -110,7 +154,10 @@ class VideoTransformTrack(MediaStreamTrack):
             else:
                 try:
                     int_sid = int(f["student_id"])
-                    if int_sid in newly_stable_ids:
+                    if not self._is_enrolled(int_sid):
+                        f["in_class"] = False
+                        f["attendance_status"] = "NOT_IN_CLASS"
+                    elif int_sid in newly_stable_ids:
                         f["attendance_status"] = "NEWLY_MARKED"
                     elif int_sid in self.registered_students:
                         f["attendance_status"] = "ALREADY_ATTENDED"

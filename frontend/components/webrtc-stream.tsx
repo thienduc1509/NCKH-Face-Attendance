@@ -15,6 +15,7 @@ export interface DetectionFace {
   detection_score?: number
   recognized: boolean
   attendance_status?: string
+  in_class?: boolean
 }
 
 export interface DetectionPayload {
@@ -73,8 +74,13 @@ export function computeBoundingBox(
     : norm_x * canvasWidth
 
   const isRecognized = face.recognized === true
-  const color = isRecognized ? "#22C55E" : "#EF4444"
-  const label = isRecognized
+  // Người đã nhận diện nhưng không đăng ký lớp học phần đang mở
+  const isNotInClass =
+    face.attendance_status === "NOT_IN_CLASS" || face.in_class === false
+  const color = isNotInClass ? "#F59E0B" : isRecognized ? "#22C55E" : "#EF4444"
+  const label = isNotInClass
+    ? "Không thuộc lớp"
+    : isRecognized
     ? `${face.student_id ? `${face.student_id} - ` : ""}${face.student_name || "Sinh viên"}${
         face.score ? ` (${Math.round(face.score * 100)}%)` : ""
       }`
@@ -247,7 +253,13 @@ export function WebRTCStream({
         if (boxW <= 0 || boxH <= 0) return
 
         // 1. Subtle background tint
-        ctx.fillStyle = face.recognized ? "rgba(34, 197, 94, 0.08)" : "rgba(239, 68, 68, 0.08)"
+        const isNotInClass =
+          face.attendance_status === "NOT_IN_CLASS" || face.in_class === false
+        ctx.fillStyle = isNotInClass
+          ? "rgba(245, 158, 11, 0.10)"
+          : face.recognized
+          ? "rgba(34, 197, 94, 0.08)"
+          : "rgba(239, 68, 68, 0.08)"
         if (typeof (ctx as any).roundRect === "function") {
           ctx.beginPath()
           ;(ctx as any).roundRect(boxX, boxY, boxW, boxH, 4)
