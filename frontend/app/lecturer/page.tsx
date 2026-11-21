@@ -2,6 +2,7 @@
 
 import { toast } from "sonner"
 import { useEffect, useState } from "react"
+import { useRouter } from "next/navigation"
 import { AppShell } from "@/components/app-shell"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { StatusBadge } from "@/components/status-badge"
@@ -24,6 +25,7 @@ import { Claim } from "@/types/lecturer"
 import { cn, formatDateVN } from "@/lib/utils"
 
 export default function LecturerDashboard() {
+  const router = useRouter()
   const [profile, setProfile] = useState<{ name: string; email: string; maCanBo: number } | null>(null)
   const [stats, setStats] = useState({
     lopCount: 0,
@@ -38,6 +40,7 @@ export default function LecturerDashboard() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [processingClaimId, setProcessingClaimId] = useState<string | null>(null)
+  const [openingLiveId, setOpeningLiveId] = useState<string | null>(null)
 
   const loadData = async () => {
     setLoading(true)
@@ -93,8 +96,19 @@ export default function LecturerDashboard() {
         // Map today classes
         setTodayClasses(todaySched.map((item: any) => {
           const isMakeup = item.note && (item.note.includes("Học bù") || item.note.includes("Hoãn"));
+          const classSessionId = Number(item.class_session_id)
+          const hasClassSession = Number.isSafeInteger(classSessionId) && classSessionId > 0
+          const classSectionId = Number(item.class_section_id)
           return {
-            id: item.class_session_id || item.class_section_id,
+            id: hasClassSession
+              ? `session-${classSessionId}`
+              : `timetable-${classSectionId}-${item.timetable_id || "default"}`,
+            classSessionId: hasClassSession ? classSessionId : null,
+            classSectionId,
+            classDate: item.class_date || null,
+            startTime: item.start_time || null,
+            endTime: item.end_time || null,
+            sessionStatus: item.class_session_status || "CHUA_DIEM_DANH",
             subject: item.course_name || "Môn học",
             time: `${item.start_time || "N/A"} - ${item.end_time || "N/A"}`,
             room: "Phòng A2-301",
@@ -130,6 +144,82 @@ export default function LecturerDashboard() {
   useEffect(() => {
     loadData()
   }, [])
+
+  const handleOpenLive = async (classItem: any) => {
+    if (openingLiveId !== null) return
+    setOpeningLiveId(classItem.id)
+    let newlyCreatedSessionId: number | null = null
+    try {
+      let classSessionId = classItem.classSessionId
+      if (!classSessionId) {
+        if (!Number.isSafeInteger(classItem.classSectionId) || classItem.classSectionId <= 0) {
+          throw new Error("Không tìm thấy mã lớp học phần để mở phiên.")
+        }
+        const createdSession = await LecturerService.createSession({
+          class_section_id: classItem.classSectionId,
+          class_date: classItem.classDate || new Date().toISOString().split("T")[0],
+          start_time: classItem.startTime,
+          end_time: classItem.endTime,
+          session_number: classItem.session || 1,
+          late_grace_minutes: 15,
+          recognition_threshold: 0.6,
+          note: "Buổi học tạo từ lịch giảng dạy",
+          status: "CHUA_DIEM_DANH",
+        })
+        const createdSessionId = Number(createdSession.class_session_id)
+        if (!Number.isSafeInteger(createdSessionId) || createdSessionId <= 0) {
+          throw new Error("Không nhận được mã buổi học hợp lệ từ máy chủ.")
+        }
+        classSessionId = createdSessionId
+        newlyCreatedSessionId = classSessionId
+        setTodayClasses((previous) =>
+          previous.map((item) =>
+            item.id === classItem.id
+              ? {
+                  ...item,
+                  classSessionId,
+                  sessionStatus: createdSession.status || "CHUA_DIEM_DANH",
+                }
+              : item,
+          ),
+        )
+      }
+
+      if (!Number.isSafeInteger(classSessionId) || classSessionId <= 0) {
+        throw new Error("Không nhận được mã buổi học hợp lệ từ máy chủ.")
+      }
+
+      if (classItem.sessionStatus !== "DANG_DIEN_RA" && classItem.sessionStatus !== "ongoing") {
+        const openedSession = await LecturerService.moDiemDanh(classSessionId)
+        if (
+          Number(openedSession.class_session_id) !== classSessionId ||
+          openedSession.status !== "DANG_DIEN_RA"
+        ) {
+          throw new Error("Máy chủ chưa xác nhận phiên điểm danh đang diễn ra.")
+        }
+      }
+
+      router.push(`/lecturer/live/${classSessionId}`)
+    } catch (err) {
+      if (newlyCreatedSessionId) {
+        setTodayClasses((previous) =>
+          previous.map((item) =>
+            item.id === classItem.id
+              ? {
+                  ...item,
+                  classSessionId: newlyCreatedSessionId,
+                  sessionStatus: "CHUA_DIEM_DANH",
+                }
+              : item,
+          ),
+        )
+      }
+      const message = err instanceof Error ? err.message : "Không thể mở phòng Live. Vui lòng thử lại."
+      toast.error(message)
+    } finally {
+      setOpeningLiveId(null)
+    }
+  }
 
   const handleClaimStatus = async (claimId: string, status: 'approved' | 'rejected') => {
     if (!profile) return
@@ -331,12 +421,21 @@ export default function LecturerDashboard() {
                             <Clock className="w-4 h-4 text-[#0EA5E9]" />
                             <span>{cls.time}</span>
                           </div>
-                          <Link href={`/lecturer/live/${cls.id}`}>
-                            <Button size="lg" className="bg-[#0EA5E9] hover:bg-[#0284C7] text-white font-bold text-sm px-5 py-2.5 rounded-xl shadow-md transition-all hover:scale-102">
+                          <Button
+                            size="lg"
+                            onClick={() => handleOpenLive(cls)}
+                            disabled={openingLiveId !== null}
+                            className="bg-[#0EA5E9] hover:bg-[#0284C7] text-white font-bold text-sm px-5 py-2.5 rounded-xl shadow-md transition-all hover:scale-102"
+                          >
+                            {openingLiveId === cls.id ? (
+                              <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                            ) : (
                               <Video className="w-4 h-4 mr-2" />
-                              Mở phòng Live
-                            </Button>
-                          </Link>
+                            )}
+                            {cls.sessionStatus === "DANG_DIEN_RA" || cls.sessionStatus === "ongoing"
+                              ? "Vào phòng Live"
+                              : "Mở phòng Live"}
+                          </Button>
                         </div>
                       </div>
                     ))

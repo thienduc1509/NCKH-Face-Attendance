@@ -83,7 +83,8 @@ def build_teaching_schedule_item(
             db_session.exec(
                 select(func.count(CourseRegistration.student_id)).where(
                     CourseRegistration.class_section_id
-                    == class_section.class_section_id
+                    == class_section.class_section_id,
+                    CourseRegistration.status.is_(True),
                 )
             ).first()
             or 0

@@ -206,7 +206,8 @@ def read_my_class_sections(*, session: Session, account_id: int) -> dict[str, An
             session.exec(
                 select(func.count(CourseRegistration.student_id)).where(
                     CourseRegistration.class_section_id
-                    == class_section.class_section_id
+                    == class_section.class_section_id,
+                    CourseRegistration.status.is_(True),
                 )
             ).first()
             or 0

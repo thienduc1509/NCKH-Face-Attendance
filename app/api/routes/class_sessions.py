@@ -3,7 +3,7 @@ from typing import Any
 from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy import delete
+from sqlalchemy import delete, func
 from sqlmodel import select
 
 from app.api.deps import (
@@ -22,6 +22,7 @@ from app.models import (
     ClassSessionPublic,
     ClassSessionsPublic,
     ClassSessionUpdate,
+    CourseRegistration,
     Message,
 )
 from app.services import timetable_service
@@ -203,6 +204,18 @@ def reset_and_create_test_session(
         current_account=current_account,
         class_section_id=class_section_id,
     )
+    registered_student_count = session.exec(
+        select(func.count(CourseRegistration.student_id)).where(
+            CourseRegistration.class_section_id == class_section_id,
+            CourseRegistration.status.is_(True),
+        )
+    ).one()
+    if registered_student_count == 0:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Không thể mở phiên test khi lớp chưa có sinh viên",
+        )
+
     session_ids = [
         sid
         for sid in session.exec(

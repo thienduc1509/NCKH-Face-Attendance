@@ -3,7 +3,7 @@ from datetime import date, datetime, time
 
 from fastapi.testclient import TestClient
 from sqlalchemy.pool import StaticPool
-from sqlmodel import Session, SQLModel, create_engine
+from sqlmodel import Session, SQLModel, create_engine, select
 
 from app.api.deps import (
     get_current_account,
@@ -250,6 +250,187 @@ def test_read_staff_teaching_schedule_rejects_invalid_date_range() -> None:
         assert (
             response.json()["message"] == "from_date must be before or equal to to_date"
         )
+
+
+def test_reset_test_session_rejects_class_without_active_students() -> None:
+    """Không xóa buổi cũ khi lớp không có sinh viên đăng ký hợp lệ."""
+    for client, session in make_test_client():
+        staff = Staff(
+            last_name="Nguyen",
+            first_name="Giang",
+            google_ten_dang_nhap="giang@example.edu",
+            account_id=2,
+        )
+        course = Course(
+            course_id=701,
+            course_name="Tri tue nhan tao",
+            credit_count=3,
+            status=True,
+        )
+        session.add_all([staff, course])
+        session.commit()
+        session.refresh(staff)
+
+        class_section = ClassSection(
+            course_id=course.course_id,
+            staff_id=staff.staff_id,
+            semester=1,
+            academic_year="2025-2026",
+            status=True,
+        )
+        session.add(class_section)
+        session.commit()
+        session.refresh(class_section)
+
+        old_session = ClassSession(
+            class_section_id=class_section.class_section_id,
+            class_date=date(2025, 10, 20),
+            status="CHUA_DIEM_DANH",
+        )
+        session.add(old_session)
+        session.commit()
+        session.refresh(old_session)
+
+        response = client.post(
+            f"/api/class-sessions/class-sections/{class_section.class_section_id}/reset-test-session",
+            json={},
+        )
+
+        assert response.status_code == 400
+        assert (
+            response.json()["detail"]
+            == "Không thể mở phiên test khi lớp chưa có sinh viên"
+        )
+        assert session.get(ClassSession, old_session.class_session_id) is not None
+
+
+def test_reset_test_session_opens_when_active_student_exists() -> None:
+    """Lớp có sinh viên đăng ký hợp lệ vẫn mở được phiên test mới."""
+    for client, session in make_test_client():
+        staff = Staff(
+            last_name="Nguyen",
+            first_name="Giang",
+            google_ten_dang_nhap="giang@example.edu",
+            account_id=2,
+        )
+        major = Major(major_name="Cong nghe thong tin")
+        course = Course(
+            course_id=703,
+            course_name="Tri tue nhan tao",
+            credit_count=3,
+            status=True,
+        )
+        session.add_all([staff, major, course])
+        session.commit()
+        session.refresh(staff)
+        session.refresh(major)
+
+        student = Student(
+            last_name="Le",
+            first_name="An",
+            major_id=major.major_id,
+        )
+        session.add(student)
+        session.commit()
+        session.refresh(student)
+
+        class_section = ClassSection(
+            course_id=course.course_id,
+            staff_id=staff.staff_id,
+            semester=1,
+            academic_year="2025-2026",
+            status=True,
+        )
+        session.add(class_section)
+        session.commit()
+        session.refresh(class_section)
+        session.add(
+            CourseRegistration(
+                student_id=student.student_id,
+                class_section_id=class_section.class_section_id,
+                status=True,
+            )
+        )
+        old_session = ClassSession(
+            class_section_id=class_section.class_section_id,
+            class_date=date(2025, 10, 20),
+            status="CHUA_DIEM_DANH",
+        )
+        session.add(old_session)
+        session.commit()
+        session.refresh(old_session)
+
+        response = client.post(
+            f"/api/class-sessions/class-sections/{class_section.class_section_id}/reset-test-session",
+            json={},
+        )
+        body = response.json()
+
+        assert response.status_code == 200
+        assert body["class_session_id"] is not None
+        assert body["status"] == "DANG_DIEN_RA"
+        assert body["class_date"] != old_session.class_date.isoformat()
+        remaining_sessions = session.exec(
+            select(ClassSession).where(
+                ClassSession.class_section_id == class_section.class_section_id
+            )
+        ).all()
+        assert len(remaining_sessions) == 1
+
+
+def test_read_my_class_sections_counts_only_active_registrations() -> None:
+    """Sĩ số hiển thị chỉ tính các lượt đăng ký còn hiệu lực."""
+    for client, session in make_test_client():
+        staff = Staff(
+            last_name="Nguyen",
+            first_name="Giang",
+            google_ten_dang_nhap="giang@example.edu",
+            account_id=2,
+        )
+        major = Major(major_name="Cong nghe thong tin")
+        course = Course(
+            course_id=702,
+            course_name="Tri tue nhan tao",
+            credit_count=3,
+            status=True,
+        )
+        session.add_all([staff, major, course])
+        session.commit()
+        session.refresh(staff)
+        session.refresh(major)
+
+        student = Student(
+            last_name="Le",
+            first_name="An",
+            major_id=major.major_id,
+        )
+        session.add(student)
+        session.commit()
+        session.refresh(student)
+
+        class_section = ClassSection(
+            course_id=course.course_id,
+            staff_id=staff.staff_id,
+            semester=1,
+            academic_year="2025-2026",
+            status=True,
+        )
+        session.add(class_section)
+        session.commit()
+        session.refresh(class_section)
+        session.add(
+            CourseRegistration(
+                student_id=student.student_id,
+                class_section_id=class_section.class_section_id,
+                status=False,
+            )
+        )
+        session.commit()
+
+        response = client.get("/api/staff/me/class-sections")
+
+        assert response.status_code == 200
+        assert response.json()["data"][0]["current_students"] == 0
 
 
 def test_read_staff_recent_class_sessions_returns_recent_lessons() -> None:

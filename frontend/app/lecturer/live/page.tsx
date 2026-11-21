@@ -112,9 +112,10 @@ export default function LecturerLiveOverviewPage() {
                       </div>
                       <Button
                         size="sm"
-                        disabled={resettingClassId !== null}
+                        disabled={resettingClassId !== null || cls.siSoHienTai === 0}
                         onClick={() => handleStartTestSession(cls)}
-                        className="bg-[#D97706] hover:bg-[#B45309] text-white font-semibold shrink-0"
+                        aria-describedby={cls.siSoHienTai === 0 ? `empty-class-${cls.id}` : undefined}
+                        className="bg-[#D97706] hover:bg-[#B45309] text-white font-semibold shrink-0 disabled:cursor-not-allowed disabled:opacity-50"
                       >
                         {resettingClassId === cls.id ? (
                           <Loader2 className="w-4 h-4 mr-1.5 animate-spin" />
@@ -123,6 +124,11 @@ export default function LecturerLiveOverviewPage() {
                         )}
                         Xóa buổi cũ & Mở Phiên Test Mới
                       </Button>
+                      {cls.siSoHienTai === 0 && (
+                        <p id={`empty-class-${cls.id}`} className="text-xs font-medium text-[#B91C1C]">
+                          Lớp chưa có sinh viên
+                        </p>
+                      )}
                     </div>
                   ))}
                 </CardContent>

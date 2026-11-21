@@ -43,7 +43,7 @@ export default function StudentLiveClassroom() {
   const [subjectName, setSubjectName] = useState("CS101 - Lập trình Web")
   const [sessionNum, setSessionNum] = useState(8)
   const [lecturerName, setLecturerName] = useState("Nguyễn Văn B")
-  const [isSessionActive, setIsSessionActive] = useState(true)
+  const [isSessionActive, setIsSessionActive] = useState(false)
   const [apiError, setApiError] = useState<string | null>(null)
   const [lastVerifiedTime, setLastVerifiedTime] = useState<string | null>(null)
   const [isManualScanning, setIsManualScanning] = useState(false)
@@ -59,7 +59,10 @@ export default function StudentLiveClassroom() {
     let disposed = false
     const params = new URLSearchParams(window.location.search)
     const idVal = params.get("id")
-    const sessionId = idVal ? parseInt(idVal) : null
+    const parsedSessionId = idVal ? Number(idVal) : Number.NaN
+    const sessionId = Number.isSafeInteger(parsedSessionId) && parsedSessionId > 0
+      ? parsedSessionId
+      : null
 
     if (sessionId) {
       setMaBuoiHoc(sessionId)
@@ -67,6 +70,9 @@ export default function StudentLiveClassroom() {
       apiClient.get<any>(`/class-sessions/${sessionId}`)
         .then((buoiHoc) => {
           if (disposed) return
+          if (Number(buoiHoc.class_session_id) !== sessionId) {
+            throw new Error("M? bu?i h?c tr? v? kh?ng kh?p v?i phi?n ???c y?u c?u.")
+          }
           setSessionNum(buoiHoc.session_number || 1)
           const active = buoiHoc.status === "DANG_DIEN_RA"
           setIsSessionActive(active)
@@ -101,6 +107,7 @@ export default function StudentLiveClassroom() {
         if (current) {
           if (current.session_number) setSessionNum(current.session_number)
           if (current.course_name) setSubjectName(current.course_name)
+          setIsSessionActive(current.status === "DANG_DIEN_RA")
         }
 
         if (!current || current.status !== "DANG_DIEN_RA") {
@@ -199,7 +206,7 @@ export default function StudentLiveClassroom() {
   };
 
   const verifyNow = useCallback(async (manual = false) => {
-    if (!cameraEnabled || (maBuoiHoc && !isSessionActive) || isVerifyingRef.current) return;
+    if (!cameraEnabled || !maBuoiHoc || !isSessionActive || isVerifyingRef.current) return;
     const blob = await captureFrame();
     if (!blob) return;
 
@@ -233,9 +240,9 @@ export default function StudentLiveClassroom() {
       setVerificationStatus("pending");
       return;
     }
-    if (maBuoiHoc && !isSessionActive) {
+    if (!maBuoiHoc || !isSessionActive) {
       isVerifiedRef.current = false;
-      setVerificationStatus("failed");
+      if (maBuoiHoc) setVerificationStatus("failed");
       return;
     }
     if (verificationStatus === "verified") {

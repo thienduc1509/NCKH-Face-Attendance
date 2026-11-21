@@ -60,7 +60,9 @@ interface StudentTile {
 export default function LecturerLiveClassroom() {
   const params = useParams()
   const router = useRouter()
-  const maBuoiHoc = parseInt(params?.id as string)
+  const sessionParam = params?.id
+  const maBuoiHoc = typeof sessionParam === "string" ? Number(sessionParam) : Number.NaN
+  const hasValidSessionId = Number.isSafeInteger(maBuoiHoc) && maBuoiHoc > 0
 
   const [sessionActive, setSessionActive] = useState(false)
   const [sessionTime, setSessionTime] = useState(0)
@@ -78,11 +80,18 @@ export default function LecturerLiveClassroom() {
   const [isResetting, setIsResetting] = useState(false)
 
   const loadSessionData = async () => {
-    if (!maBuoiHoc) return
+    if (!hasValidSessionId) {
+      setError("M? bu?i h?c kh?ng h?p l?.")
+      setLoading(false)
+      return
+    }
     setLoading(true)
     setError(null)
     try {
       const buoiHoc = await apiClient.get<any>(`/class-sessions/${maBuoiHoc}`)
+      if (Number(buoiHoc.class_session_id) !== maBuoiHoc) {
+        throw new Error("M? bu?i h?c tr? v? kh?ng kh?p v?i phi?n ???c y?u c?u.")
+      }
       setLateMinutes(buoiHoc.late_grace_minutes || 15)
       setSessionNum(buoiHoc.session_number || 1)
       setSessionDate(buoiHoc.class_date || "")
@@ -118,7 +127,7 @@ export default function LecturerLiveClassroom() {
   // Active real-time polling of student recognition statuses
   useEffect(() => {
     let interval: NodeJS.Timeout
-    if (maBuoiHoc) {
+    if (hasValidSessionId) {
       // Fetch immediately on mount or status change
       LecturerService.getLiveAttendance(maBuoiHoc)
         .then(data => setStudents(data))
@@ -133,7 +142,7 @@ export default function LecturerLiveClassroom() {
     return () => {
       if (interval) clearInterval(interval)
     }
-  }, [maBuoiHoc, sessionActive])
+  }, [maBuoiHoc, hasValidSessionId, sessionActive])
 
   const formatTime = (seconds: number) => {
     const hrs = Math.floor(seconds / 3600)
@@ -151,14 +160,20 @@ export default function LecturerLiveClassroom() {
   }
 
   const handleStartSession = async () => {
-    if (!maBuoiHoc) return
+    if (!hasValidSessionId) return
     try {
       try {
         await apiClient.patch(`/class-sessions/${maBuoiHoc}`, { late_grace_minutes: lateMinutes })
       } catch (e) {
         console.warn("Could not patch late_grace_minutes:", e)
       }
-      await LecturerService.moDiemDanh(maBuoiHoc)
+      const openedSession = await LecturerService.moDiemDanh(maBuoiHoc)
+      if (
+        Number(openedSession.class_session_id) !== maBuoiHoc ||
+        openedSession.status !== "DANG_DIEN_RA"
+      ) {
+        throw new Error("M?y ch? ch?a x?c nh?n phi?n ?i?m danh ?ang di?n ra.")
+      }
       setSessionActive(true)
       setSessionTime(0)
       const attList = await LecturerService.getLiveAttendance(maBuoiHoc)
@@ -170,7 +185,7 @@ export default function LecturerLiveClassroom() {
   }
 
   const handleEndSession = async () => {
-    if (!maBuoiHoc) return
+    if (!hasValidSessionId) return
     if (!confirm("Bạn có chắc chắn muốn kết thúc buổi học và chốt điểm danh?")) return
     try {
       await LecturerService.dongDiemDanh(maBuoiHoc)
